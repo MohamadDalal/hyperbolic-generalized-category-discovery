@@ -18,6 +18,7 @@ Notes about the code and different files in it
 - Goes through test set and gets predictions for all images. Also creates a labels array and a mask array, which designates each prediction/value to open or closed set
 - Fits all data using sklearn's KMeans algorith. Number of clusters is equal to number of classes
 - Does not really do any supervised KMeans
+- Uses test set as validation set. This probably should not be done and SimGCD removes this code
 
 # estimate_k.py
 - Uses a features dataset that takes an original dataset, then replaces the images by the pre-computed features. It loads features on request and not all in the start. Will result in overhead if passing through the dataset more than once.

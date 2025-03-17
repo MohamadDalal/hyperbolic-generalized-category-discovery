@@ -12,6 +12,7 @@ def pairwise_distance(data1, data2, batch_size=None):
     the input data is N*M matrix, where M is the dimension
     we first expand the N*M matrix into N*1*M matrix A and 1*N*M matrix B
     then a simple elementwise operation of A and B will handle the pairwise operation of points represented by data
+    Distance is not squared, meaning this is actually distance squared
     '''
     #N*1*M
     A = data1.unsqueeze(dim=1)

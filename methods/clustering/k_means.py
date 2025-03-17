@@ -103,7 +103,7 @@ if __name__ == "__main__":
     parser.add_argument('--root_dir', type=str, default=feature_extract_dir)
     parser.add_argument('--warmup_model_exp_id', type=str, default=None)
     parser.add_argument('--use_best_model', type=str2bool, default=True)
-    parser.add_argument('--spatial', type=str2bool, default=False)
+    parser.add_argument('--spatial', type=str2bool, default=False)  # Doesn't seem to be used anywhere
     parser.add_argument('--semi_sup', type=str2bool, default=True)
     parser.add_argument('--max_kmeans_iter', type=int, default=10)
     parser.add_argument('--k_means_init', type=int, default=10)
