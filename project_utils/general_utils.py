@@ -164,7 +164,7 @@ def init_experiment(args, runner_name=None, exp_id=None):
     args.model_path = os.path.join(args.model_dir, 'model.pt')
 
     print(f'Experiment saved to: {args.log_dir}')
-
+    # TODO: Replace this with wandb
     args.writer = SummaryWriter(log_dir=args.log_dir)
 
     hparam_dict = {}

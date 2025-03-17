@@ -384,12 +384,13 @@ if __name__ == "__main__":
 
         args.interpolation = 3
         args.crop_pct = 0.875
-        pretrain_path = dino_pretrain_path
+        #pretrain_path = dino_pretrain_path
 
-        model = vits.__dict__['vit_base']()
+        #model = vits.__dict__['vit_base']()
+        model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
 
-        state_dict = torch.load(pretrain_path, map_location='cpu')
-        model.load_state_dict(state_dict)
+        #state_dict = torch.load(pretrain_path, map_location='cpu')
+        #model.load_state_dict(state_dict)
 
         if args.warmup_model_dir is not None:
             print(f'Loading weights from {args.warmup_model_dir}')

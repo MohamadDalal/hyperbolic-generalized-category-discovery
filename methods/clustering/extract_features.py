@@ -20,7 +20,7 @@ from data.fgvc_aircraft import FGVCAircraft, aircraft_root
 from project_utils.general_utils import strip_state_dict, str2bool
 from copy import deepcopy
 
-from config import feature_extract_dir, dino_pretrain_path
+from config import feature_extract_dir#, dino_pretrain_path
 
 def extract_features_dino(model, loader, save_dir):
 
@@ -100,12 +100,12 @@ if __name__ == "__main__":
         extract_features_func = extract_features_dino
         args.interpolation = 3
         args.crop_pct = 0.875
-        pretrain_path = dino_pretrain_path
+        #pretrain_path = dino_pretrain_path
 
-        model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16', pretrained=False)
+        model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')#, pretrained=False)
 
-        state_dict = torch.load(pretrain_path, map_location='cpu')
-        model.load_state_dict(state_dict)
+        #state_dict = torch.load(pretrain_path, map_location='cpu')
+        #model.load_state_dict(state_dict)
 
         _, val_transform = get_transform('imagenet', image_size=224, args=args)
 
@@ -114,12 +114,12 @@ if __name__ == "__main__":
         extract_features_func = extract_features_dino
         args.interpolation = 3
         args.crop_pct = 0.875
-        pretrain_path = '/work/sagar/pretrained_models/dino/dino_resnet50_pretrain.pth'
+        #pretrain_path = '/work/sagar/pretrained_models/dino/dino_resnet50_pretrain.pth'
 
-        model = torch.hub.load('facebookresearch/dino:main', 'dino_resnet50', pretrained=False)
+        model = torch.hub.load('facebookresearch/dino:main', 'dino_resnet50')#, pretrained=False)
 
-        state_dict = torch.load(pretrain_path, map_location='cpu')
-        model.load_state_dict(state_dict)
+        #state_dict = torch.load(pretrain_path, map_location='cpu')
+        #model.load_state_dict(state_dict)
 
         _, val_transform = get_transform('imagenet', image_size=224, args=args)
 

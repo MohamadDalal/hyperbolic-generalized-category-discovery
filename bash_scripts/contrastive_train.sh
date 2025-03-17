@@ -1,19 +1,45 @@
-PYTHON='/users/sagar/miniconda3/envs/open_world_prototype/bin/python'
+#!/bin/bash
+
+#SBATCH --output="logs/GCD-Aircraft.log"
+#SBATCH --job-name="GCD-Aircraft"
+#SBATCH --time=12:00:00
+#SBATCH --signal=B:SIGTERM@30
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-gpu=8
+#SBATCH --mem=16G
+# #SBATCH --nodelist=ailab-l4-07
+# #SBATCH --exclude=nv-ai-03
+
+#####################################################################################
+
+# Script arguments
+container_path="${HOME}/pytorch-24.08.sif"
+
+# Dynamically set output and error filenames using job ID and iteration
+outfile="logs/GCD-Aircraft.out"
+
+# Print the filenames for debugging
+echo "Output file: ${outfile}"
+#echo "Error file: ${errfile}"
+#echo "Restart num: ${restarts}"
+echo "Using container: ${container_path}"
+
+PYTHON='/ceph/home/student.aau.dk/mdalal20/P10-project/generalized-category-discovery/venv/bin/python'
 
 hostname
 nvidia-smi
 
-export CUDA_VISIBLE_DEVICES=0
+# export CUDA_VISIBLE_DEVICES=0
 
 # Get unique log file,
-SAVE_DIR=/work/sagar/osr_novel_categories/dev_outputs/
+#SAVE_DIR=/ceph/home/student.aau.dk/mdalal20/P10-project/generalized-category-discovery/dev_outputs/
 
-EXP_NUM=$(ls ${SAVE_DIR} | wc -l)
-EXP_NUM=$((${EXP_NUM}+1))
-echo $EXP_NUM
+#EXP_NUM=$(ls ${SAVE_DIR} | wc -l)
+#EXP_NUM=$((${EXP_NUM}+1))
+#echo $EXP_NUM
 
-${PYTHON} -m methods.contrastive_training.contrastive_training \
-            --dataset_name 'scars' \
+srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.contrastive_training.contrastive_training \
+            --dataset_name 'aircraft' \
             --batch_size 128 \
             --grad_from_block 11 \
             --epochs 200 \
@@ -25,5 +51,5 @@ ${PYTHON} -m methods.contrastive_training.contrastive_training \
             --contrast_unlabel_only 'False' \
             --transform 'imagenet' \
             --lr 0.1 \
-            --eval_funcs 'v1' 'v2' \
-> ${SAVE_DIR}logfile_${EXP_NUM}.out
+            --eval_funcs 'v1' 'v2' 
+#> ${SAVE_DIR}logfile_${EXP_NUM}.out
