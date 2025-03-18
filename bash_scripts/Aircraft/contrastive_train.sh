@@ -24,7 +24,7 @@ echo "Output file: ${outfile}"
 #echo "Restart num: ${restarts}"
 echo "Using container: ${container_path}"
 
-PYTHON='/ceph/home/student.aau.dk/mdalal20/P10-project/generalized-category-discovery/venv/bin/python'
+PYTHON='/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/venv/bin/python'
 
 hostname
 nvidia-smi
@@ -32,7 +32,7 @@ nvidia-smi
 # export CUDA_VISIBLE_DEVICES=0
 
 # Get unique log file,
-#SAVE_DIR=/ceph/home/student.aau.dk/mdalal20/P10-project/generalized-category-discovery/dev_outputs/
+#SAVE_DIR=/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/dev_outputs/
 
 #EXP_NUM=$(ls ${SAVE_DIR} | wc -l)
 #EXP_NUM=$((${EXP_NUM}+1))

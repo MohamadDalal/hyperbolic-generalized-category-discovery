@@ -44,7 +44,7 @@ def test_cluster(dataloader, centers, args):
         mask = np.append(mask, np.array([True if x.item() in range(len(args.train_classes))
                                          else False for x in label]))
 
-    return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, save_name="")
+    return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs, save_name="")
 
     
 
@@ -102,8 +102,10 @@ if __name__ == "__main__":
                                       batch_size=args.batch_size, shuffle=False)
 
     # Load cluster
+    print('Loading cluser centers...')
     cluster_load_path = os.path.join(args.save_dir, 'ss_kmeans_cluster_centres.pt')
     cluster_centers = torch.load(cluster_load_path, weights_only=False)
 
-    print('Performing SS-K-Means on all in the training data...')
+    print('Testing cluster centers on test set...')
     all_acc, old_acc, new_acc= test_cluster(test_loader, cluster_centers, args)
+    print(f"all: {all_acc}, old: {old_acc}, new: {new_acc}")

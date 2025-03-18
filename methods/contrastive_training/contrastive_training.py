@@ -355,6 +355,7 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=1e-4)
     parser.add_argument('--epochs', default=20, type=int)
     parser.add_argument('--exp_root', type=str, default=exp_root)
+    parser.add_argument('--exp_id', type=str, default=None)
     parser.add_argument('--transform', type=str, default='imagenet')
     parser.add_argument('--seed', default=1, type=int)
 
@@ -374,7 +375,7 @@ if __name__ == "__main__":
     args.num_labeled_classes = len(args.train_classes)
     args.num_unlabeled_classes = len(args.unlabeled_classes)
 
-    init_experiment(args, runner_name=['metric_learn_gcd'])
+    init_experiment(args, runner_name=['metric_learn_gcd'], exp_id=args.exp_id)
     print(f'Using evaluation function {args.eval_funcs[0]} to print results')
 
     # ----------------------

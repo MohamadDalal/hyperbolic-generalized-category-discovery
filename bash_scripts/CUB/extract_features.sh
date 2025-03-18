@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-Extract-Aircraft.log"
-#SBATCH --job-name="GCD-Extract-Aircraft"
+#SBATCH --output="logs/GCD-Extract-CUB.log"
+#SBATCH --job-name="GCD-Extract-CUB"
 #SBATCH --time=12:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
@@ -16,7 +16,7 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-Extract-Aircraft.out"
+outfile="logs/GCD-Extract-CUB.out"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -24,12 +24,12 @@ echo "Output file: ${outfile}"
 #echo "Restart num: ${restarts}"
 echo "Using container: ${container_path}"
 
-PYTHON='/ceph/home/student.aau.dk/mdalal20/P10-project/generalized-category-discovery/venv/bin/python'
+PYTHON='/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/venv/bin/python'
 
 hostname
 nvidia-smi
 
 #export CUDA_VISIBLE_DEVICES=0
 
-srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset aircraft --use_best_model 'True' \
- --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/(04.03.2025_|_24.690)/checkpoints/model.pt'
+srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset cub --use_best_model 'False' \
+ --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/(17.03.2025_|_22.593)/checkpoints/model.pt'

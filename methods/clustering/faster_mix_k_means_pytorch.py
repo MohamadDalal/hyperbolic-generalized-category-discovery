@@ -79,7 +79,7 @@ class K_Means:
 
         return remaining_l_feats, remaining_l_targets, val_l_feats, val_l_targets
 
-
+    # Chooses the new centers as the points farthest away from any other centers
     def kpp(self, X, pre_centers=None, k=10, random_state=None):
         random_state = check_random_state(random_state)
 
