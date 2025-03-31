@@ -23,6 +23,8 @@ import torch.nn as nn
 
 from torch.nn.init import trunc_normal_
 
+import project_utils.lorentz as L
+
 def drop_path(x, drop_prob: float = 0., training: bool = False):
     if drop_prob == 0. or not training:
         return x
@@ -33,6 +35,18 @@ def drop_path(x, drop_prob: float = 0., training: bool = False):
     output = x.div(keep_prob) * random_tensor
     return output
 
+def get_params_groups(model):
+    regularized = []
+    not_regularized = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        # we do not regularize biases nor Norm parameters
+        if name.endswith(".bias") or len(param.shape) == 1:
+            not_regularized.append(param)
+        else:
+            regularized.append(param)
+    return [{'params': regularized}, {'params': not_regularized, 'weight_decay': 0.}]
 
 class DropPath(nn.Module):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
@@ -297,6 +311,75 @@ class DINOHead(nn.Module):
         x = self.last_layer(x)
         return x
 
+class Hyperbolic_DINOHead(nn.Module):
+    def __init__(self, in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256,
+                 curv_init: float = 1.0,learn_curv: bool = True):
+        super().__init__()
+        # Initialize curvature parameter. Hyperboloid curvature will be `-curv`.
+        # Curvature is learned in log space
+        self.curv = nn.Parameter(
+            torch.tensor(curv_init).log(), requires_grad=learn_curv
+        )
+        # When learning the curvature parameter, restrict it in this interval to
+        # prevent training instability.
+        self._curv_minmax = {
+            "max": math.log(curv_init * 10),
+            "min": math.log(curv_init / 10),
+        }
+        # Learnable scalars to ensure that image/text features have an expected
+        # unit norm before exponential map (at initialization).
+        self.proj_alpha = nn.Parameter(torch.tensor(out_dim**-0.5).log())
+        
+        nlayers = max(nlayers, 1)
+        if nlayers == 1:
+            self.mlp = nn.Linear(in_dim, bottleneck_dim)
+        else:
+            layers = [nn.Linear(in_dim, hidden_dim)]
+            if use_bn:
+                layers.append(nn.BatchNorm1d(hidden_dim))
+            layers.append(nn.GELU())
+            for _ in range(nlayers - 2):
+                layers.append(nn.Linear(hidden_dim, hidden_dim))
+                if use_bn:
+                    layers.append(nn.BatchNorm1d(hidden_dim))
+                layers.append(nn.GELU())
+            layers.append(nn.Linear(hidden_dim, bottleneck_dim))
+            self.mlp = nn.Sequential(*layers)
+        self.apply(self._init_weights)
+        self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, out_dim, bias=False))
+        self.last_layer.weight_g.data.fill_(1)
+        if norm_last_layer:
+            self.last_layer.weight_g.requires_grad = False
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+    # Pass features through head and last projection layers
+    # Then use an exponential map to lift features to hyperbolic space
+    def forward(self, x):
+        x = self.mlp(x)
+        x = nn.functional.normalize(x, dim=-1, p=2)
+        x = self.last_layer(x)
+
+
+        # Clamp scaling factor such that it does not up-scale the feature norms.
+        # Once `exp(scale) = 1`, they can simply be removed during inference.
+        self.proj_alpha.data = torch.clamp(self.visual_alpha.data, max=0.0)
+        # Clamp curvatue in case it becomes too high or too low
+        self.curv.data = torch.clamp(self.curv.data, **self._curv_minmax)
+        x = x * self.proj_alpha.exp()
+        with torch.autocast(self.device.type, dtype=torch.float32):
+            x = L.exp_map0(x, self.curv.exp())
+        return x
+    
+    def get_curvature(self):
+        """
+        Returns the curvature parameter.
+        """
+        return self.curv.exp().item()
 
 class VisionTransformerWithLinear(nn.Module):
 
