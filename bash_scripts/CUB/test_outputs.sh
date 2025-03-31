@@ -18,6 +18,8 @@ container_path="${HOME}/pytorch-24.08.sif"
 # Dynamically set output and error filenames using job ID and iteration
 outfile="logs/GCD-Test-CUB.out"
 
+exp_id="GCD-CUB"
+
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
 #echo "Error file: ${errfile}"
@@ -35,5 +37,5 @@ hostname
 #EXP_NUM=$((${EXP_NUM}+1))
 #echo $EXP_NUM
 
-srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.test_outputs.test_outputs --dataset_name cub --warmup_model_exp_id '(17.03.2025_|_22.593)'
+srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.test_outputs.test_outputs --dataset_name cub --warmup_model_exp_id "${exp_id}"
         #> ${SAVE_DIR}logfile_${EXP_NUM}.out

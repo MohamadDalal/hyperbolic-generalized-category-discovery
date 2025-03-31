@@ -18,6 +18,8 @@ container_path="${HOME}/pytorch-24.08.sif"
 # Dynamically set output and error filenames using job ID and iteration
 outfile="logs/GCD-KMeans-CUB.out"
 
+exp_id="GCD-CUB"
+
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
 #echo "Error file: ${errfile}"
