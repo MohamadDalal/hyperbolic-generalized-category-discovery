@@ -75,6 +75,50 @@ def pairwise_dist(
     _distance = torch.acosh(torch.clamp(c_xyl, min=1 + eps))
     return _distance / curv**0.5
 
+def elementwise_inner(x: Tensor, y: Tensor, curv: float | Tensor = 1.0) -> Tensor:
+    """
+    Compute elementwise Lorentzian inner product between input vectors.
+
+    Args:
+        x: Tensor of shape `(B, D)` giving a batch of space components of
+            vectors on the hyperboloid.
+        y: Tensor of same shape as `x` giving another batch of vectors.
+        curv: Positive scalar denoting negative hyperboloid curvature.
+
+    Returns:
+        Tensor of shape `(B, )` giving elementwise Lorentzian inner product
+        between input vectors.
+    """
+
+    x_time = torch.sqrt(1 / curv + torch.sum(x**2, dim=-1))
+    y_time = torch.sqrt(1 / curv + torch.sum(y**2, dim=-1))
+    xyl = torch.sum(x * y, dim=-1) - x_time * y_time
+    return xyl
+
+def elementwise_dist(
+    x: Tensor, y: Tensor, curv: float | Tensor = 1.0, eps: float = 1e-8
+) -> Tensor:
+    """
+    Compute the elementwise geodesic distance between two batches of points on
+    the hyperboloid.
+
+    Args:
+        x: Tensor of shape `(B1, D)` giving a space components of a batch
+            of point on the hyperboloid.
+        y: Tensor of shape `(B2, D)` giving a space components of another
+            batch of points on the hyperboloid.
+        curv: Positive scalar denoting negative hyperboloid curvature.
+        eps: Small float number to avoid numerical instability.
+
+    Returns:
+        Tensor of shape `(B1, B2)` giving pairwise distance along the geodesics
+        connecting the input points.
+    """
+    
+    # Ensure numerical stability in arc-cosh by clamping input.
+    c_xyl = -curv * elementwise_inner(x, y, curv)
+    _distance = torch.acosh(torch.clamp(c_xyl, min=1 + eps))
+    return _distance / curv**0.5
 
 def exp_map0(x: Tensor, curv: float | Tensor = 1.0, eps: float = 1e-8) -> Tensor:
     """
@@ -125,6 +169,86 @@ def log_map0(x: Tensor, curv: float | Tensor = 1.0, eps: float = 1e-8) -> Tensor
     _output = _distance0 * x / torch.clamp(rc_xnorm, min=eps)
     return _output
 
+#def klein_transform(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
+#    x_time = torch.sqrt(1 / curv + torch.sum(x**2, dim=-1, keepdim=True))
+#    print(x.shape, x_time.shape)
+#    return x / (curv**0.5 * x_time)
+#
+#def klein_transform_inv(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
+#    x_time = torch.sqrt(1 / (curv - curv**2*torch.sum(x**2, dim=-1, keepdim=True)))
+#    return x * (curv**0.5 * x_time)
+
+# TODO: Consider seperating into batches to avoid overflow in einstein midpoint
+
+def einstein_midpoint(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
+    """
+    Compute the Einstein midpoint of multiple points on the hyperboloid. The Einstein
+    midpoint is the point centroid of points in the Klein model.
+    This is the transformed version for the Lorentz model.
+
+    Args:
+        x: Tensor of shape `(B, D)` giving a batch of space components of
+            vectors on the hyperboloid.
+        curv: Positive scalar denoting negative hyperboloid curvature.
+
+    Returns:
+        Tensor of shape `(1, D)` giving the Einstein midpoint of input vectors.
+    """
+    x_time = torch.sqrt(1 / curv + torch.sum(x**2, dim=-1))
+    midpoint = torch.sum(x, dim=0) / (curv**0.5 * torch.sum(x_time))
+    return midpoint
+
+# This centroid is numerically unstable due to transforming to Klein and back
+#def einstein_midpoint2(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
+#    """
+#    Compute the Einstein midpoint of multiple points on the hyperboloid. The Einstein
+#    midpoint is the point centroid of points in the Klein model.
+#    This function transforms to Klein, finds the midpoint, and then transforms back.
+#
+#    This is numerically unstable due to transforming to Klein and back
+#
+#    Args:
+#        x: Tensor of shape `(B, D)` giving a batch of space components of
+#            vectors on the hyperboloid.
+#        curv: Positive scalar denoting negative hyperboloid curvature.
+#
+#    Returns:
+#        Tensor of shape `(1, D)` giving the Einstein midpoint of input vectors.
+#    """
+#    x = klein_transform(x, curv)
+#    lorentz_factor = (1 - curv * torch.sum(x**2, dim=-1, keepdim=True))**-0.5
+#    #print(lorentz_factor)
+#    midpoint = torch.sum(lorentz_factor*x, dim=0) / torch.sum(lorentz_factor)
+#    return klein_transform_inv(midpoint)
+
+# This centroid makes no sense, as the denominator will always be 1/sqrt(c)
+# Because <x,x>_K = -1/c. Therefore, the centroid is just sqrt(c) time sum of all vectors
+# Which in no way or form can be the middle point unless the middle point is origo or something
+# Mind you I added the minus in the denominator to match MERU, but it might be wrong
+# And the centroid might be an imaginary point (It's probably not though)
+#def centroid(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
+#    """
+#    Compute the centroid of many points on the hyperboloid. The centroid
+#    is the point on the geodesic minimizing the distance to all other points
+#    (I think). Source: https://math.stackexchange.com/a/2173370
+#
+#    Args:
+#        x: Tensor of shape `(B, D)` giving a batch of space components of
+#            vectors on the hyperboloid.
+#        curv: Positive scalar denoting negative hyperboloid curvature.
+#
+#    Returns:
+#        Tensor of shape `(1, D)` giving the Einstein midpoint of input vectors.
+#    """
+#
+#    #x_time = torch.sqrt(1 / curv + torch.sum(x**2, dim=-1))
+#    sum_space = torch.sum(x, dim=0)
+#    #sum_time = torch.sum(x_time)
+#    #print(torch.sum(sum_space**2))
+#    #print(sum_time**2)
+#    #print(elementwise_inner(sum_space, sum_space, curv))
+#    centroid = sum_space / (-elementwise_inner(sum_space, sum_space, curv))**0.5
+#    return centroid
 
 def half_aperture(
     x: Tensor, curv: float | Tensor = 1.0, min_radius: float = 0.1, eps: float = 1e-8
