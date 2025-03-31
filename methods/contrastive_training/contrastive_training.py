@@ -21,23 +21,28 @@ from torch.nn import functional as F
 from project_utils.cluster_and_log_utils import log_accs_from_preds
 from config import exp_root, dino_pretrain_path
 
+import project_utils.lorentz as L
+from methods.clustering.faster_mix_k_means_pytorch import K_Means as SemiSupKMeans
+
 # TODO: Debug
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
+# TODO: Consider using a learnable temperature like in CLIP and MERU
 class SupConLoss(torch.nn.Module):
     """Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
     It also supports the unsupervised contrastive loss in SimCLR
     From: https://github.com/HobbitLong/SupContrast"""
     def __init__(self, temperature=0.07, contrast_mode='all',
-                 base_temperature=0.07):
+                 base_temperature=0.07, hyperbolic=False):
         super(SupConLoss, self).__init__()
         self.temperature = temperature
         self.contrast_mode = contrast_mode
         self.base_temperature = base_temperature
+        self.hyperbolic = hyperbolic
 
-    def forward(self, features, labels=None, mask=None):
+    def forward(self, features, labels=None, mask=None, curv=1.0):
         """Compute loss for model. If both `labels` and `mask` are None,
         it degenerates to SimCLR unsupervised loss:
         https://arxiv.org/pdf/2002.05709.pdf
@@ -84,27 +89,39 @@ class SupConLoss(torch.nn.Module):
         else:
             raise ValueError('Unknown mode: {}'.format(self.contrast_mode))
 
-        # compute logits
-        anchor_dot_contrast = torch.div(
-            torch.matmul(anchor_feature, contrast_feature.T),
-            self.temperature)
+        # compute logits. DONE: Make sure that the direction of the values is correct after stabilizing
+        if self.hyperbolic:
+            # Result of this: Highest distance will be lowest value. Lowest distance will be 0
+            minus_distance = - L.pairwise_dist(anchor_feature, contrast_feature, curv=curv) / self.temperature
 
-        # for numerical stability
-        logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
-        logits = anchor_dot_contrast - logits_max.detach()
+            # for numerical stability, as soft max is translation invariant
+            logits_max, _ = torch.max(minus_distance, dim=1, keepdim=True)
+            logits = anchor_dot_contrast - logits_max.detach()
+
+        else:
+            # Result of this: Lowest similarity will be lowest value. Highest similarity will be 0
+            anchor_dot_contrast = torch.div(
+                torch.matmul(anchor_feature, contrast_feature.T),
+                self.temperature)
+
+            # for numerical stability, as soft max is translation invariant
+            logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
+            logits = anchor_dot_contrast - logits_max.detach()
 
         # tile mask
         mask = mask.repeat(anchor_count, contrast_count)
-        # mask-out self-contrast cases
+        # mask-out self-contrast cases. Setting 0 on the diagonal and 1 for the rest
+        # I need to read on what scatter does, but this code gives a matrix of 1 with 0 on the diagonal
         logits_mask = torch.scatter(
             torch.ones_like(mask),
             1,
             torch.arange(batch_size * anchor_count).view(-1, 1).to(device),
             0
         )
+        # Remove diagonal from tiled mask
         mask = mask * logits_mask
 
-        # compute log_prob
+        # compute log_prob (softmax)
         exp_logits = torch.exp(logits) * logits_mask
         log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
 
@@ -129,7 +146,7 @@ class ContrastiveLearningViewGenerator(object):
         return [self.base_transform(x) for i in range(self.n_views)]
 
 
-def info_nce_logits(features, args):
+def info_nce_logits(features, args, curv=1.0):
 
     b_ = 0.5 * int(features.size(0))
 
@@ -137,12 +154,15 @@ def info_nce_logits(features, args):
     labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
     labels = labels.to(device)
 
-    features = F.normalize(features, dim=1)
+    if args.hyperbolic:
+        similarity_matrix = - L.pairwise_dist(features, features, curv=curv)
+    else:
+        features = F.normalize(features, dim=1)
 
-    similarity_matrix = torch.matmul(features, features.T)
-    # assert similarity_matrix.shape == (
-    #     self.args.n_views * self.args.batch_size, self.args.n_views * self.args.batch_size)
-    # assert similarity_matrix.shape == labels.shape
+        similarity_matrix = torch.matmul(features, features.T)
+        # assert similarity_matrix.shape == (
+        #     self.args.n_views * self.args.batch_size, self.args.n_views * self.args.batch_size)
+        # assert similarity_matrix.shape == labels.shape
 
     # discard the main diagonal from both: labels and similarities matrix
     mask = torch.eye(labels.shape[0], dtype=torch.bool).to(device)
@@ -163,9 +183,9 @@ def info_nce_logits(features, args):
     return logits, labels
 
 
-def train(projection_head, model, train_loader, test_loader, unlabelled_train_loader, args):
+def train(model, train_loader, test_loader, unlabelled_train_loader, args):
 
-    optimizer = SGD(list(projection_head.parameters()) + list(model.parameters()), lr=args.lr, momentum=args.momentum,
+    optimizer = SGD(vits.get_params_groups(model), lr=args.lr, momentum=args.momentum,
                     weight_decay=args.weight_decay)
 
     exp_lr_scheduler = lr_scheduler.CosineAnnealingLR(
@@ -174,7 +194,7 @@ def train(projection_head, model, train_loader, test_loader, unlabelled_train_lo
             eta_min=args.lr * 1e-3,
         )
 
-    sup_con_crit = SupConLoss()
+    sup_con_crit = SupConLoss(hyperbolic=args.hyperbolic)
     best_test_acc_lab = 0
 
     for epoch in range(args.epochs):
@@ -182,7 +202,6 @@ def train(projection_head, model, train_loader, test_loader, unlabelled_train_lo
         loss_record = AverageMeter()
         train_acc_record = AverageMeter()
 
-        projection_head.train()
         model.train()
 
         for batch_idx, batch in enumerate(tqdm(train_loader)):
@@ -193,14 +212,11 @@ def train(projection_head, model, train_loader, test_loader, unlabelled_train_lo
             class_labels, mask_lab = class_labels.to(device), mask_lab.to(device).bool()
             images = torch.cat(images, dim=0).to(device)
 
-            # Extract features with base model
+            # Extract features with model
             features = model(images)
 
-            # Pass features through projection head
-            features = projection_head(features)
-
-            # L2-normalize features
-            features = torch.nn.functional.normalize(features, dim=-1)
+            # L2-normalize features if not using hyperbolic space
+            features = features if args.hyperbolic else torch.nn.functional.normalize(features, dim=-1)
 
             # Choose which instances to run the contrastive loss on
             if args.contrast_unlabel_only:
@@ -211,7 +227,18 @@ def train(projection_head, model, train_loader, test_loader, unlabelled_train_lo
                 # Contrastive loss for all examples
                 con_feats = features
 
-            contrastive_logits, contrastive_labels = info_nce_logits(features=con_feats, args=args)
+            # In normal contrastive learning we use similarity measures
+            # So we doing cross entropy we assign the target to the positive pair
+            # Such that loss is decreased when positive pairs have higher similarity and negative pairs have lower similarities
+            # In cosine similarity this would correspond to highest being 1 and lowest being -1
+            # In hyperbolic space we use the distance measure, which is the opposite. That is why we take the negative of the distance
+            # We still assign the target to the positive pair
+            # Now positive pairs need lower distance and negative pairs need higher distance (before taking minus of distance)
+            # Since the range has changed from (-1,1) to (-infty to 0) the loss can behave differently. I have not investigated how different that is 
+            if args.hyperbolic:
+                contrastive_logits, contrastive_labels = info_nce_logits(features=con_feats, args=args, curv=model[1].get_curvature())
+            else:
+                contrastive_logits, contrastive_labels = info_nce_logits(features=con_feats, args=args)
             contrastive_loss = torch.nn.CrossEntropyLoss()(contrastive_logits, contrastive_labels)
 
             # Supervised contrastive loss
@@ -219,7 +246,10 @@ def train(projection_head, model, train_loader, test_loader, unlabelled_train_lo
             sup_con_feats = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
             sup_con_labels = class_labels[mask_lab]
 
-            sup_con_loss = sup_con_crit(sup_con_feats, labels=sup_con_labels)
+            if args.hyperbolic:
+                sup_con_loss = sup_con_crit(sup_con_feats, labels=sup_con_labels, curv=model[1].get_curvature())
+            else:
+                sup_con_loss = sup_con_crit(sup_con_feats, labels=sup_con_labels)
 
             # Total loss
             loss = (1 - args.sup_con_weight) * contrastive_loss + args.sup_con_weight * sup_con_loss
@@ -269,9 +299,6 @@ def train(projection_head, model, train_loader, test_loader, unlabelled_train_lo
         torch.save(model.state_dict(), args.model_path)
         print("model saved to {}.".format(args.model_path))
 
-        torch.save(projection_head.state_dict(), args.model_path[:-3] + '_proj_head.pt')
-        print("projection head saved to {}.".format(args.model_path[:-3] + '_proj_head.pt'))
-
         if old_acc_test > best_test_acc_lab:
 
             print(f'Best ACC on old Classes on disjoint test set: {old_acc_test:.4f}...')
@@ -280,9 +307,6 @@ def train(projection_head, model, train_loader, test_loader, unlabelled_train_lo
 
             torch.save(model.state_dict(), args.model_path[:-3] + f'_best.pt')
             print("model saved to {}.".format(args.model_path[:-3] + f'_best.pt'))
-
-            torch.save(projection_head.state_dict(), args.model_path[:-3] + f'_proj_head_best.pt')
-            print("projection head saved to {}.".format(args.model_path[:-3] + f'_proj_head_best.pt'))
 
             best_test_acc_lab = old_acc_test
 
@@ -318,7 +342,10 @@ def test_kmeans(model, test_loader,
     # -----------------------
     print('Fitting K-Means...')
     all_feats = np.concatenate(all_feats)
-    kmeans = KMeans(n_clusters=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0).fit(all_feats)
+    if args.hyperbolic:
+        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=model[1].get_curvature()).fit(all_feats)
+    else:
+        kmeans = KMeans(n_clusters=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0).fit(all_feats)
     preds = kmeans.labels_
     print('Done!')
 
@@ -365,6 +392,8 @@ if __name__ == "__main__":
     parser.add_argument('--n_views', default=2, type=int)
     parser.add_argument('--contrast_unlabel_only', type=str2bool, default=False)
 
+    parser.add_argument('--hyperbolic', type=str2bool, default=False)
+
     # ----------------------
     # INIT
     # ----------------------
@@ -396,8 +425,6 @@ if __name__ == "__main__":
         if args.warmup_model_dir is not None:
             print(f'Loading weights from {args.warmup_model_dir}')
             model.load_state_dict(torch.load(args.warmup_model_dir, map_location='cpu'))
-
-        model.to(device)
 
         # NOTE: Hardcoded image size as we do not finetune the entire ViT model
         args.image_size = 224
@@ -460,11 +487,15 @@ if __name__ == "__main__":
     # ----------------------
     # PROJECTION HEAD
     # ----------------------
-    projection_head = vits.__dict__['DINOHead'](in_dim=args.feat_dim,
-                               out_dim=args.mlp_out_dim, nlayers=args.num_mlp_layers)
-    projection_head.to(device)
+    if args.hyperbolic:
+        projection_head = vits.__dict__['Hyperbolic_DINOHead'](in_dim=args.feat_dim,
+                                                               out_dim=args.mlp_out_dim, nlayers=args.num_mlp_layers, )
+    else:
+        projection_head = vits.__dict__['DINOHead'](in_dim=args.feat_dim,
+                                                    out_dim=args.mlp_out_dim, nlayers=args.num_mlp_layers)
+    model = torch.nn.Sequential(model, projection_head).to(device)
 
     # ----------------------
     # TRAIN
     # ----------------------
-    train(projection_head, model, train_loader, test_loader_labelled, test_loader_unlabelled, args)
+    train(model, train_loader, test_loader_labelled, test_loader_unlabelled, args)
