@@ -1,8 +1,8 @@
 # -----------------
 # DATASET ROOTS
 # -----------------
-cifar_10_root = '/ceph/home/student.aau.dk/mdalal20/P10-project/Datasets/CIFAR10/cifar-10-batches-py'
-cifar_100_root = '/ceph/home/student.aau.dk/mdalal20/P10-project/Datasets/CIFAR100/cifar-100-python'
+cifar_10_root = '/ceph/home/student.aau.dk/mdalal20/P10-project/Datasets/CIFAR10'
+cifar_100_root = '/ceph/home/student.aau.dk/mdalal20/P10-project/Datasets/CIFAR100'
 cub_root = '/ceph/home/student.aau.dk/mdalal20/P10-project/Datasets/CUB'
 aircraft_root = '/ceph/home/student.aau.dk/mdalal20/P10-project/Datasets/FGVC'
 herbarium_dataroot = '/ceph/home/student.aau.dk/mdalal20/P10-project/Datasets/Herbarium'

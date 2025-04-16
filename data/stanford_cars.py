@@ -9,8 +9,8 @@ from torch.utils.data import Dataset
 
 from data.data_utils import subsample_instances
 
-car_root = "/work/sagar/datasets/stanford_car/cars_{}/"
-meta_default_path = "/work/sagar/datasets/stanford_car/devkit/cars_{}.mat"
+car_root = "/ceph/home/student.aau.dk/mdalal20/P10-project/Datasets/stanford_cars/cars_{}/"
+meta_default_path = "/ceph/home/student.aau.dk/mdalal20/P10-project/Datasets/stanford_cars/devkit/cars_{}.mat"
 
 class CarsDataset(Dataset):
     """
