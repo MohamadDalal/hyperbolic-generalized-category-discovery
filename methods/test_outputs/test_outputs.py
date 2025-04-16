@@ -15,6 +15,7 @@ from data.get_datasets import get_datasets, get_class_splits
 
 from tqdm import tqdm
 from config import feature_extract_dir
+import project_utils.lorentz as L
 
 #import warnings
 #warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -36,7 +37,7 @@ def test_cluster(dataloader, centers, args):
 
         feats = torch.nn.functional.normalize(feats, dim=-1)
 
-        dist = pairwise_distance(feats, centers)
+        dist = L.pairwise_dist(feats, centers, args.curvature, 1e-6) if args.hyperbolic else pairwise_distance(feats, centers)
         pred = torch.argmin(dist, dim=1)
 
         preds = np.append(preds, pred.cpu().numpy())
@@ -63,6 +64,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_name', type=str, default='aircraft', help='options: cifar10, cifar100, scars')
     parser.add_argument('--prop_train_labels', type=float, default=0.5) # Decides what percentage of the labelled dataset to use?
     parser.add_argument('--eval_funcs', nargs='+', help='Which eval functions to use', default=['v1', 'v2'])
+    parser.add_argument('--hyperbolic', type=str2bool, default=False)
 
     # ----------------------
     # INIT
@@ -88,6 +90,15 @@ if __name__ == "__main__":
         print(f'Using pretrained {args.model_name} features...')
 
     print(args.save_dir)
+
+    # --------------------
+    # LOAD PARAMETERS
+    # --------------------
+
+    if args.hyperbolic:
+        extra_params = torch.load(os.path.join(args.save_dir, 'extra_params.pth'), map_location=device)
+        args.curvature = extra_params['curvature']
+        print(f'Loaded params: {extra_params}')
 
     # --------------------
     # DATASETS

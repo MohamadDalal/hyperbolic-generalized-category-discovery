@@ -18,6 +18,9 @@ from tqdm import tqdm
 from scipy.optimize import minimize_scalar
 from functools import partial
 
+from project_utils.general_utils import str2bool
+from methods.clustering.faster_mix_k_means_pytorch import K_Means as SemiSupKMeans
+
 # TODO: Debug
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -59,8 +62,14 @@ def test_kmeans(K, merge_test_loader, args=None, verbose=False):
     all_feats = np.concatenate(all_feats)
 
     print('Fitting K-Means...')
-    kmeans = KMeans(n_clusters=K, random_state=0).fit(all_feats)
-    preds = kmeans.labels_
+    if args.hyperbolic:
+        #TODO: Investigate why K++ is failing to assign more than one center (Points too close to one another maybe?)
+        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=args.curvature, init="random")
+        kmeans.fit(all_feats)
+        preds = kmeans.labels_.numpy()
+    else:
+        kmeans = KMeans(n_clusters=K, random_state=0).fit(all_feats)
+        preds = kmeans.labels_
 
     # -----------------------
     # EVALUATE
@@ -126,8 +135,14 @@ def test_kmeans_for_scipy(K, merge_test_loader, args=None, verbose=False):
     all_feats = np.concatenate(all_feats)
 
     print(f'Fitting K-Means for K = {K}...')
-    kmeans = KMeans(n_clusters=K, random_state=0).fit(all_feats)
-    preds = kmeans.labels_
+    if args.hyperbolic:
+        #TODO: Investigate why K++ is failing to assign more than one center (Points too close to one another maybe?)
+        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=args.curvature, init="random")
+        kmeans.fit(all_feats)
+        preds = kmeans.labels_.numpy()
+    else:
+        kmeans = KMeans(n_clusters=K, random_state=0).fit(all_feats)
+        preds = kmeans.labels_
 
     # -----------------------
     # EVALUATE
@@ -226,6 +241,7 @@ if __name__ == "__main__":
     parser.add_argument('--search_mode', type=str, default='brent', help='Mode for black box optimisation')
     parser.add_argument('--dataset_name', type=str, default='cifar10', help='options: cifar10, cifar100, scars')
     parser.add_argument('--prop_train_labels', type=float, default=0.5)
+    parser.add_argument('--hyperbolic', type=str2bool, default=False)
 
     # ----------------------
     # INIT
@@ -249,6 +265,15 @@ if __name__ == "__main__":
         print(f'Using features from experiment: {args.warmup_model_exp_id}')
     else:
         print(f'Using pretrained {args.model_name} features...')
+
+    # --------------------
+    # LOAD PARAMETERS
+    # --------------------
+
+    if args.hyperbolic:
+        extra_params = torch.load(os.path.join(args.save_dir, 'extra_params.pth'), map_location=device)
+        args.curvature = extra_params['curvature']
+        print(f'Loaded params: {extra_params}')
 
     # --------------------
     # DATASETS

@@ -63,8 +63,13 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
     u_targets = targets[~mask_lab]       # Get unlabelled targets
 
     print('Fitting Semi-Supervised K-Means...')
-    kmeans = SemiSupKMeans(k=K, tolerance=1e-4, max_iterations=args.max_kmeans_iter, init='k-means++',
-                           n_init=args.k_means_init, random_state=None, n_jobs=None, pairwise_batch_size=1024, mode=None)
+    if args.hyperbolic:
+        kmeans = SemiSupKMeans(k=K, tolerance=1e-4, max_iterations=args.max_kmeans_iter, init='random',
+                            n_init=args.k_means_init, random_state=None, n_jobs=None, pairwise_batch_size=None, mode=None,
+                            hyperbolic=True, curv=args.curvature)
+    else:
+        kmeans = SemiSupKMeans(k=K, tolerance=1e-4, max_iterations=args.max_kmeans_iter, init='k-means++',
+                            n_init=args.k_means_init, random_state=None, n_jobs=None, pairwise_batch_size=1024, mode=None)
 
     l_feats, u_feats, l_targets, u_targets = (torch.from_numpy(x).to(device) for
                                               x in (l_feats, u_feats, l_targets, u_targets))
@@ -112,6 +117,7 @@ if __name__ == "__main__":
     parser.add_argument('--prop_train_labels', type=float, default=0.5)
     parser.add_argument('--eval_funcs', nargs='+', help='Which eval functions to use', default=['v1', 'v2'])
     parser.add_argument('--use_ssb_splits', type=str2bool, default=True)
+    parser.add_argument('--hyperbolic', type=str2bool, default=False)
 
     # ----------------------
     # INIT
@@ -142,6 +148,15 @@ if __name__ == "__main__":
         print(f'Using pretrained {args.model_name} features...')
 
     print(args.save_dir)
+
+    # --------------------
+    # LOAD PARAMETERS
+    # --------------------
+
+    if args.hyperbolic:
+        extra_params = torch.load(os.path.join(args.save_dir, 'extra_params.pth'), map_location=device)
+        args.curvature = extra_params['curvature']
+        print(f'Loaded params: {extra_params}')
 
     # --------------------
     # DATASETS

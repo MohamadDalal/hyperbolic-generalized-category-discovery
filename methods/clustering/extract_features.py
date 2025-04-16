@@ -21,6 +21,7 @@ from project_utils.general_utils import strip_state_dict, str2bool
 from copy import deepcopy
 
 from config import feature_extract_dir#, dino_pretrain_path
+from models import vision_transformer as vits
 
 def extract_features_dino(model, loader, save_dir):
 
@@ -33,7 +34,7 @@ def extract_features_dino(model, loader, save_dir):
             images, labels, idxs = batch[:3]
             images = images.to(device)
 
-            features = model(images)         # CLS_Token for ViT, Average pooled vector for R50
+            features, _ = model(images)         # CLS_Token for ViT, Average pooled vector for R50
 
             # Save features
             for f, t, uq in zip(features, labels, idxs):
@@ -56,7 +57,7 @@ def extract_features_timm(model, loader, save_dir):
             images, labels, idxs = batch[:3]
             images = images.to(device)
 
-            features = model.forward_features(images)         # CLS_Token for ViT, Average pooled vector for R50
+            features, _ = model.forward_features(images)         # CLS_Token for ViT, Average pooled vector for R50
 
             # Save features
             for f, t, uq in zip(features, labels, idxs):
@@ -81,6 +82,8 @@ if __name__ == "__main__":
     parser.add_argument('--use_best_model', type=str2bool, default=True)
     parser.add_argument('--model_name', type=str, default='vit_dino', help='Format is {model_name}_{pretrain}')
     parser.add_argument('--dataset', type=str, default='aircraft', help='options: cifar10, cifar100, scars')
+    parser.add_argument('--exp_id', type=str, default="")
+    parser.add_argument('--hyperbolic', type=str2bool, default=False)
 
     # ----------------------
     # INIT
@@ -107,38 +110,54 @@ if __name__ == "__main__":
         #state_dict = torch.load(pretrain_path, map_location='cpu')
         #model.load_state_dict(state_dict)
 
-        _, val_transform = get_transform('imagenet', image_size=224, args=args)
+        # NOTE: Hardcoded image size as we do not finetune the entire ViT model
+        args.image_size = 224
+        args.feat_dim = 768
+        args.num_mlp_layers = 3
+        #args.mlp_out_dim = 65536
+        args.mlp_out_dim = 768
 
-    elif args.model_name == 'resnet50_dino':
-
-        extract_features_func = extract_features_dino
-        args.interpolation = 3
-        args.crop_pct = 0.875
-        #pretrain_path = '/work/sagar/pretrained_models/dino/dino_resnet50_pretrain.pth'
-
-        model = torch.hub.load('facebookresearch/dino:main', 'dino_resnet50')#, pretrained=False)
-
-        #state_dict = torch.load(pretrain_path, map_location='cpu')
-        #model.load_state_dict(state_dict)
-
-        _, val_transform = get_transform('imagenet', image_size=224, args=args)
-
+        _, val_transform = get_transform('imagenet', image_size=args.image_size, args=args)
     else:
 
         raise NotImplementedError
 
+    print("Loading projection head...")
+
+    # ----------------------
+    # PROJECTION HEAD
+    # ----------------------
+    if args.hyperbolic:
+        projection_head = vits.__dict__['Hyperbolic_DINOHead'](in_dim=args.feat_dim, out_dim=args.mlp_out_dim,
+                                                               nlayers=args.num_mlp_layers, learn_curv=False)
+    else:
+        projection_head = vits.__dict__['DINOHead'](in_dim=args.feat_dim, out_dim=args.mlp_out_dim,
+                                                    nlayers=args.num_mlp_layers)
+    model = torch.nn.Sequential(model, projection_head).to(device)
+
+    print("Loading model weights...")
+
     if args.warmup_model_dir is not None:
 
-        warmup_id = args.warmup_model_dir.split('(')[1].split(')')[0]
+        #warmup_id = args.warmup_model_dir.split('(')[1].split(')')[0]
 
         if args.use_best_model:
             args.warmup_model_dir = args.warmup_model_dir[:-3] + '_best.pt'
-            args.save_dir += '_(' + args.warmup_model_dir.split('(')[1].split(')')[0] + ')_best'
+            if len(args.warmup_model_dir.split('(')) > 1:
+                args.save_dir += '_(' + args.warmup_model_dir.split('(')[1].split(')')[0] + ')_best'
+            else:
+                args.save_dir += args.exp_id + '_best'
+            print(f'Using weights from {args.warmup_model_dir} ...')
+            state_dict = torch.load(args.warmup_model_dir)
         else:
-            args.save_dir += '_(' + args.warmup_model_dir.split('(')[1].split(')')[0] + ')'
+            if len(args.warmup_model_dir.split('(')) > 1:
+                args.save_dir += '_(' + args.warmup_model_dir.split('(')[1].split(')')[0] + ')'
+            else:
+                args.save_dir += args.exp_id
+            print(f'Using weights from {args.warmup_model_dir} ...')
+            state_dict = torch.load(args.warmup_model_dir)["model_state_dict"]
 
-        print(f'Using weights from {args.warmup_model_dir} ...')
-        state_dict = torch.load(args.warmup_model_dir)
+        
         model.load_state_dict(state_dict)
 
         print(f'Saving to {args.save_dir}')
@@ -245,5 +264,12 @@ if __name__ == "__main__":
     test_save_dir = os.path.join(args.save_dir, 'test')
     print('Extracting features from test split...')
     extract_features_func(model=model, loader=test_loader, save_dir=test_save_dir)
+
+    # Save model parameters
+    if args.hyperbolic:
+        print('Saving hyperbolic curvature and projection alpha...')
+        print(f'Curvature: {model[1].get_curvature()}')
+        print(f'Projection alpha: {model[1].get_proj_alpha()}')
+        torch.save({"curvature": model[1].get_curvature(), "proj_alpha": model[1].get_proj_alpha()}, os.path.join(args.save_dir, 'extra_params.pth'))
 
     print('Done!')
