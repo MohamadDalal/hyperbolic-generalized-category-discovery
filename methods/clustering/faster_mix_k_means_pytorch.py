@@ -112,9 +112,10 @@ class K_Means:
 
             if len((cum_prob >= r).nonzero()) == 0:
                 debug = 0
+                print(f"K++: No center assigned. Iterating again. Current centers: {C.shape[0]}")
             else:
                 ind = (cum_prob >= r).nonzero()[0][0]
-            C = torch.cat((C, X[ind].view(1, -1)), dim=0)
+                C = torch.cat((C, X[ind].view(1, -1)), dim=0)
 
         return C
 
@@ -257,6 +258,8 @@ class K_Means:
 
 
     def fit(self, X):
+        if isinstance(X, np.ndarray):
+            X = torch.from_numpy(X)
         random_state = check_random_state(self.random_state)
         best_inertia = None
         if effective_n_jobs(self.n_jobs) == 1:
@@ -282,7 +285,12 @@ class K_Means:
 
 
     def fit_mix(self, u_feats, l_feats, l_targets):
-
+        if isinstance(u_feats, np.ndarray):
+            u_feats = torch.from_numpy(u_feats)
+        if isinstance(l_feats, np.ndarray):
+            l_feats = torch.from_numpy(l_feats)
+        if isinstance(l_targets, np.ndarray):
+            l_targets = torch.from_numpy(l_targets)
         random_state = check_random_state(self.random_state)
         best_inertia = None
         fit_func = self.fit_mix_once

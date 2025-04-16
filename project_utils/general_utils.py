@@ -140,6 +140,7 @@ def init_experiment(args, runner_name=None, exp_id=None):
         # Unique identifier for experiment
         now = '({:02d}.{:02d}.{}_|_'.format(datetime.now().day, datetime.now().month, datetime.now().year) + \
               datetime.now().strftime("%S.%f")[:-3] + ')'
+        args.exp_id = now
 
         log_dir = os.path.join(root_dir, 'log', now)
         while os.path.exists(log_dir):
@@ -163,6 +164,12 @@ def init_experiment(args, runner_name=None, exp_id=None):
 
     args.model_dir = model_root_dir
     args.model_path = os.path.join(args.model_dir, 'model.pt')
+
+    # Instantiate directory to save debug info to
+    debug_root_dir = os.path.join(args.log_dir, 'debug')
+    if not os.path.exists(debug_root_dir):
+        os.mkdir(debug_root_dir)
+    args.debug_dir = debug_root_dir
 
     print(f'Experiment saved to: {args.log_dir}')
     # TODO: Replace this with wandb

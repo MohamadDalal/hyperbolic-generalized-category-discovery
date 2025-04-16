@@ -140,7 +140,7 @@ def exp_map0(x: Tensor, curv: float | Tensor = 1.0, eps: float = 1e-8) -> Tensor
     rc_xnorm = curv**0.5 * torch.norm(x, dim=-1, keepdim=True)
 
     # Ensure numerical stability in sinh by clamping input.
-    sinh_input = torch.clamp(rc_xnorm, min=eps, max=math.asinh(2**15))
+    sinh_input = torch.clamp(rc_xnorm, min=eps, max=math.asinh(2**15))  # asinh(2**15) = 11.090354889191955
     _output = torch.sinh(sinh_input) * x / torch.clamp(rc_xnorm, min=eps)
     return _output
 
