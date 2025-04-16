@@ -24,6 +24,7 @@ import torch.nn as nn
 from torch.nn.init import trunc_normal_
 
 import project_utils.lorentz as L
+import matplotlib.pyplot as plt
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
     if drop_prob == 0. or not training:
@@ -274,7 +275,7 @@ def vit_base(patch_size=16, **kwargs):
         qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
 
-
+# TODO: Consider ablating without using the last layer, as SimGCD does contrastive learning on the layer before last
 class DINOHead(nn.Module):
     def __init__(self, in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256):
         super().__init__()
@@ -309,11 +310,12 @@ class DINOHead(nn.Module):
         x = self.mlp(x)
         x = nn.functional.normalize(x, dim=-1, p=2)
         x = self.last_layer(x)
-        return x
+        x_norm = torch.norm(x, dim=1)
+        return x, [(x_norm.mean(), x_norm.std(), x_norm.max(), x_norm.min())]
 
 class Hyperbolic_DINOHead(nn.Module):
     def __init__(self, in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256,
-                 curv_init: float = 1.0,learn_curv: bool = True):
+                 curv_init: float = 1.0, alpha_init: float = 1.0, learn_curv: bool = True, learn_alpha: bool = True):
         super().__init__()
         # Initialize curvature parameter. Hyperboloid curvature will be `-curv`.
         # Curvature is learned in log space
@@ -328,7 +330,10 @@ class Hyperbolic_DINOHead(nn.Module):
         }
         # Learnable scalars to ensure that image/text features have an expected
         # unit norm before exponential map (at initialization).
-        self.proj_alpha = nn.Parameter(torch.tensor(out_dim**-0.5).log())
+        #self.proj_alpha = nn.Parameter(torch.tensor(out_dim**-0.5).log())
+        #self.proj_alpha = nn.Parameter(torch.tensor(1.7035**-1).log(), requires_grad=learn_alpha)
+        #self.proj_alpha = nn.Parameter(torch.tensor(1).log(), requires_grad=learn_alpha)
+        self.proj_alpha = nn.Parameter(torch.tensor(alpha_init).log(), requires_grad=learn_alpha)
         
         nlayers = max(nlayers, 1)
         if nlayers == 1:
@@ -363,23 +368,52 @@ class Hyperbolic_DINOHead(nn.Module):
         x = self.mlp(x)
         x = nn.functional.normalize(x, dim=-1, p=2)
         x = self.last_layer(x)
+        log_stats = []
 
 
         # Clamp scaling factor such that it does not up-scale the feature norms.
+        # Extra: Clamp scale factor such that it does not down-scale the features too much, as that can lead to training to stop.
         # Once `exp(scale) = 1`, they can simply be removed during inference.
-        self.proj_alpha.data = torch.clamp(self.visual_alpha.data, max=0.0)
+        self.proj_alpha.data = torch.clamp(self.proj_alpha.data, max=0.0, min=math.log(1e-1))
         # Clamp curvatue in case it becomes too high or too low
         self.curv.data = torch.clamp(self.curv.data, **self._curv_minmax)
+        #x_norm = torch.sqrt(torch.sum(x**2, dim=1))
+        x_norm = torch.norm(x, dim=1)
+        #print(x.shape)
+        #print(x.mean(dim=0))
+        #print(x_norm.mean(), x_norm.std())
+        log_stats.append((x_norm.mean(), x_norm.std(), x_norm.max(), x_norm.min()))
         x = x * self.proj_alpha.exp()
-        with torch.autocast(self.device.type, dtype=torch.float32):
+        #with torch.autocast(self.device.type, dtype=torch.float32):
+        with torch.autocast("cuda", dtype=torch.float32):
             x = L.exp_map0(x, self.curv.exp())
-        return x
+        #x = L.exp_map0(x, self.curv.exp())
+        #x_norm = torch.sqrt(torch.sum(x**2, dim=1))
+        x_norm = torch.norm(x, dim=1)
+        #print(x.shape)
+        #print(x.mean(dim=0))
+        #print(x_norm.mean(), x_norm.std())
+        log_stats.append((x_norm.mean(), x_norm.std(), x_norm.max(), x_norm.min()))
+        #print(x)
+        return x, log_stats
     
+    def train_curvature(self, train = True):
+        """
+        Set the curvature parameter to be trainable or not.
+        """
+        self.curv.requires_grad = train
+
     def get_curvature(self):
         """
         Returns the curvature parameter.
         """
         return self.curv.exp().item()
+    
+    def get_proj_alpha(self):
+        """
+        Returns the projection weight parameter.
+        """
+        return self.proj_alpha.exp().item()
 
 class VisionTransformerWithLinear(nn.Module):
 

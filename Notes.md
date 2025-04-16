@@ -27,7 +27,7 @@ Notes about the code and different files in it
   - Using an inbuilt scipy optimzer based on Brent's algorithm
   - Using binary search
 - Both utilize a test_kmeans function that uses sklearn's inbuil K-Means method. This also does not do any kind of supervised K-Means. Both test_kmeans functions are essentially identical. They just return opposite sign values.
-- There are multiple score functions, such as cluster, normalized mutual info (nmi) and adjusted random (ari) score. I'll read about them later
+- There are multiple score functions, such as cluster, normalized mutual info (nmi) and adjusted random (ari) score. **I'll read about them later**
 - Search algorithms are only concerned with labelled clustering accuracy
 
 # k_means.py
@@ -271,3 +271,31 @@ $$1=\frac{2\sqrt{1+c\left||\frac{2cx_{time}^2-1}{2\sqrt{c}x_{time}}x_K|\right|^2
 $$1=\frac{2\sqrt{1+c\left(\frac{2cx_{time}^2-1}{2\sqrt{c}x_{time}}\right)^2||x_K||^2}}{1+2c\left(\frac{2cx_{time}^2-1}{2\sqrt{c}x_{time}}\right)^2||x_K||^2}\frac{2cx_{time}^2-1}{2\sqrt{c}x_{time}}$$
 
 Maaaaaaaaaaaaaaaan this is so complicated
+
+# Fixing NaN in loss
+
+So far the the main culprit is getting an outlier hyperbolic embedding with a huge norm, leading to the calculating distances to overflow. However, this is not always the case, that is why I am doing more testing.
+
+From the distance function:
+$$d_L(x,y)=\sqrt{\frac{1}{c}}\cosh^{-1}(-c<x,y>_L)$$
+
+We can see that lower curvature leads to higher distances. That is because for high inner products, the c inside the arccosh does not reduce its value by much. Meaning that models with lower curvature have a lower threshold for the norm of the hyperbolic embeddings.
+
+Of course I am using negative distance, so the value being passed to the exponential function right after are all under 0. I have tried investigating the supconloss function and can see that at certain distances the values coming out of the exponent are extremely small, and are reaching 0 at the end.
+
+The full loss function is as follows:
+
+$$-\frac{1}{|N(i)|}\sum_{j\in N(i)}{\log\left(\frac{e^{-d_L(x_i, x_j)}}{\sum^N_{k=0}{1_{k!=i}e^{-d_L(x_i, x_k)}}}\right)}=\frac{1}{|N(i)|}\sum_{j\in N(i)}{-\log\left(\frac{e^{-d_L(x_i, x_j)}}{\sum^N_{k=0}{1_{k!=i}e^{-d_L(x_i, x_k)}}}\right)}=\frac{1}{|N(i)|}\sum_{j\in N(i)}{\log\left(\frac{\sum^N_{k=0}{1_{k!=i}e^{-d_L(x_i, x_k)}}}{e^{-d_L(x_i, x_j)}}\right)}$$
+
+With high distance values the exponents in the loss are gonna be extremely small, and if one embedding is very far, then its row will be all 0 and the denominator will become 0 leading to problems.
+
+After investigating it seems that a norm of 19 is the maximum I can go before having a risk of NaN. This was done by taking two opposite vectors and increasing their radius, where it produces NaN at 20. However, that was with 1.0 curvature. If I use 0.1 curvature then it reduces to 4. Now the question is: Do I want to have a hard clamp on 4? Or do I want to have a loss function that might lead to training a proper proj_alpha? Or do I want to do mixed precision calculations for calulating the loss? Maybe add a loss depending on the maximum distance? Maybe add an epsilon number so that my denominator does not go under the minimum floating number?
+
+Another thought from this: The model is probably reducing the curvature because it is a great way to increase the overall distance between embeddings.
+
+It is a bit counter-intuitive for me that a lower curvature results in embeddings being mapped farther apart in hyperbolic space, but that's just how it is the distance function works, lower c leads to steeper growth in the function.
+
+I have tried adding an epsilon making the loss function to:
+$$-\frac{1}{|N(i)|}\sum_{j\in N(i)}{\log\left(\frac{e^{-d_L(x_i, x_j)}}{\left(\sum^N_{k=0}{1_{k!=i}e^{-d_L(x_i, x_k)}}\right)+\varepsilon}\right)}=\frac{1}{|N(i)|}\sum_{j\in N(i)}{\log\left(\frac{\left(\sum^N_{k=0}{1_{k!=i}e^{-d_L(x_i, x_k)}}\right)+\varepsilon}{e^{-d_L(x_i, x_j)}}\right)}$$
+
+It is very easy for values to 

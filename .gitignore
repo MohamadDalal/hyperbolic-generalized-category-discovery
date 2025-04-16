@@ -3,3 +3,4 @@ venv
 extracted_features_public_impl
 osr_novel_categories
 logs
+wandb_logs

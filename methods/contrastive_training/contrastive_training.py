@@ -23,6 +23,8 @@ from config import exp_root, dino_pretrain_path
 
 import project_utils.lorentz as L
 from methods.clustering.faster_mix_k_means_pytorch import K_Means as SemiSupKMeans
+import wandb
+from argparse import Namespace
 
 # TODO: Debug
 import warnings
@@ -51,6 +53,7 @@ class SupConLoss(torch.nn.Module):
             labels: ground truth of shape [bsz].
             mask: contrastive mask of shape [bsz, bsz], mask_{i,j}=1 if sample j
                 has the same class as sample i. Can be asymmetric.
+            curv: curvature to use when computing hyperbolic distance
         Returns:
             A loss scalar.
         """
@@ -92,11 +95,13 @@ class SupConLoss(torch.nn.Module):
         # compute logits. DONE: Make sure that the direction of the values is correct after stabilizing
         if self.hyperbolic:
             # Result of this: Highest distance will be lowest value. Lowest distance will be 0
-            minus_distance = - L.pairwise_dist(anchor_feature, contrast_feature, curv=curv) / self.temperature
+            minus_distance = - L.pairwise_dist(anchor_feature, contrast_feature, curv=curv, eps=1e-6) / self.temperature
+            M = minus_distance
 
             # for numerical stability, as soft max is translation invariant
-            logits_max, _ = torch.max(minus_distance, dim=1, keepdim=True)
-            logits = anchor_dot_contrast - logits_max.detach()
+            logits_max, _ = torch.max(M[~torch.eye(*M.shape,dtype = torch.bool)].view(M.shape[0], M.shape[1]-1), dim=1, keepdim=True)
+            logits = minus_distance - logits_max.detach()
+            #logits = minus_distance
 
         else:
             # Result of this: Lowest similarity will be lowest value. Highest similarity will be 0
@@ -122,17 +127,39 @@ class SupConLoss(torch.nn.Module):
         mask = mask * logits_mask
 
         # compute log_prob (softmax)
-        exp_logits = torch.exp(logits) * logits_mask
+        exp_logits = torch.exp(logits*logits_mask) * logits_mask
         log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
 
         # compute mean of log-likelihood over positive
         mean_log_prob_pos = (mask * log_prob).sum(1) / mask.sum(1)
 
+        labels = ("logits", "exp_logits", "log_prob", "mean_log_prob_pos")
+        for n, i in enumerate((logits, exp_logits, log_prob, mean_log_prob_pos)):
+            if True in i.isnan():
+                print(f"{labels[n]} are NaN")
+                torch.set_printoptions(profile="full")
+                print(i)
+                torch.set_printoptions(profile="default")
+                print(i.mean())
+                print(i.std())
+                print(curv)
+                for m, j in enumerate((logits, exp_logits, log_prob, mean_log_prob_pos)):
+                    torch.save(j, os.path.join(DEBUG_DIR, f"{labels[m]}_debug.pt"))
+                    wandb.save(os.path.join(DEBUG_DIR, f"{labels[m]}_debug.pt"))
+                torch.save(features, os.path.join(DEBUG_DIR, f"features_debug.pt"))
+                wandb.save(os.path.join(DEBUG_DIR, f"features_debug.pt"))
+                #wandb.log({labels[n]: i})
+                raise ValueError(f'{labels[n]} have NaN')
+
         # loss
         loss = - (self.temperature / self.base_temperature) * mean_log_prob_pos
         loss = loss.view(anchor_count, batch_size).mean()
 
-        return loss
+        return loss, ((logits.mean(), logits.std(), logits.max(), logits.min()),
+                      (torch.exp(logits).mean(), torch.exp(logits).std(), torch.exp(logits).max(), torch.exp(logits).min()),
+                      (exp_logits.mean(), exp_logits.std(), exp_logits.max(), exp_logits.min()),
+                      (log_prob.mean(), log_prob.std(), log_prob.max(), log_prob.min()),
+                      (mean_log_prob_pos.mean(), mean_log_prob_pos.std(), mean_log_prob_pos.max(), mean_log_prob_pos.min()))
 
 
 class ContrastiveLearningViewGenerator(object):
@@ -145,7 +172,7 @@ class ContrastiveLearningViewGenerator(object):
     def __call__(self, x):
         return [self.base_transform(x) for i in range(self.n_views)]
 
-
+# TODO: Check why this does not use temperature, while supervised loss uses temperature
 def info_nce_logits(features, args, curv=1.0):
 
     b_ = 0.5 * int(features.size(0))
@@ -155,7 +182,21 @@ def info_nce_logits(features, args, curv=1.0):
     labels = labels.to(device)
 
     if args.hyperbolic:
-        similarity_matrix = - L.pairwise_dist(features, features, curv=curv)
+        similarity_matrix = - L.pairwise_dist(features, features, curv=curv, eps=1e-6)
+        if True in similarity_matrix.isnan():
+            #print(similarity_matrix)
+            print("Hyperbolic distance is NaN")
+            torch.set_printoptions(profile="full")
+            print(similarity_matrix)
+            torch.set_printoptions(profile="default")
+            print(similarity_matrix.mean())
+            print(similarity_matrix.std())
+            print(curv)
+            #wandb.log({"logits": similarity_matrix})
+            raise ValueError('Hyperbolic distance has NaN')
+        #print(similarity_matrix.mean())
+        #print(similarity_matrix.std())
+        #print(curv)
     else:
         features = F.normalize(features, dim=1)
 
@@ -183,104 +224,164 @@ def info_nce_logits(features, args, curv=1.0):
     return logits, labels
 
 
-def train(model, train_loader, test_loader, unlabelled_train_loader, args):
-
-    optimizer = SGD(vits.get_params_groups(model), lr=args.lr, momentum=args.momentum,
-                    weight_decay=args.weight_decay)
-
-    exp_lr_scheduler = lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=args.epochs,
-            eta_min=args.lr * 1e-3,
-        )
+def train(model, train_loader, test_loader, unlabelled_train_loader, args, optimizer, scheduler,
+          best_test_acc = 0, start_epoch = 0):
 
     sup_con_crit = SupConLoss(hyperbolic=args.hyperbolic)
-    best_test_acc_lab = 0
+    best_test_acc_lab = best_test_acc
+    freeze_curv_for_warmup = args.freeze_curvature.lower() == "warmup" and args.hyperbolic
+    if freeze_curv_for_warmup:
+        model[1].train_curvature(False)
 
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
 
         loss_record = AverageMeter()
+        con_loss_record = AverageMeter()
+        sup_con_loss_record = AverageMeter()
         train_acc_record = AverageMeter()
+
+        if epoch >= args.epochs_warmup and freeze_curv_for_warmup:
+            model[1].train_curvature(True)
+            freeze_curv_for_warmup = False
+            print("Unfreezing curvature at epoch {}".format(epoch))
 
         model.train()
 
         for batch_idx, batch in enumerate(tqdm(train_loader)):
+            #with torch.autograd.detect_anomaly(check_nan=True):
+            if True:
+                step_log_dict = {}
 
-            images, class_labels, uq_idxs, mask_lab = batch
-            mask_lab = mask_lab[:, 0]
+                images, class_labels, uq_idxs, mask_lab = batch
+                mask_lab = mask_lab[:, 0]
 
-            class_labels, mask_lab = class_labels.to(device), mask_lab.to(device).bool()
-            images = torch.cat(images, dim=0).to(device)
+                class_labels, mask_lab = class_labels.to(device), mask_lab.to(device).bool()
+                images = torch.cat(images, dim=0).to(device)
 
-            # Extract features with model
-            features = model(images)
+                # Extract features with model
+                features, output_log_stats = model(images)
 
-            # L2-normalize features if not using hyperbolic space
-            features = features if args.hyperbolic else torch.nn.functional.normalize(features, dim=-1)
+                # L2-normalize features if not using hyperbolic space
+                features = features if args.hyperbolic else torch.nn.functional.normalize(features, dim=-1)
 
-            # Choose which instances to run the contrastive loss on
-            if args.contrast_unlabel_only:
-                # Contrastive loss only on unlabelled instances
-                f1, f2 = [f[~mask_lab] for f in features.chunk(2)]
-                con_feats = torch.cat([f1, f2], dim=0)
-            else:
-                # Contrastive loss for all examples
-                con_feats = features
+                # Choose which instances to run the contrastive loss on
+                if args.contrast_unlabel_only:
+                    # Contrastive loss only on unlabelled instances
+                    f1, f2 = [f[~mask_lab] for f in features.chunk(2)]
+                    con_feats = torch.cat([f1, f2], dim=0)
+                else:
+                    # Contrastive loss for all examples
+                    con_feats = features
 
-            # In normal contrastive learning we use similarity measures
-            # So we doing cross entropy we assign the target to the positive pair
-            # Such that loss is decreased when positive pairs have higher similarity and negative pairs have lower similarities
-            # In cosine similarity this would correspond to highest being 1 and lowest being -1
-            # In hyperbolic space we use the distance measure, which is the opposite. That is why we take the negative of the distance
-            # We still assign the target to the positive pair
-            # Now positive pairs need lower distance and negative pairs need higher distance (before taking minus of distance)
-            # Since the range has changed from (-1,1) to (-infty to 0) the loss can behave differently. I have not investigated how different that is 
-            if args.hyperbolic:
-                contrastive_logits, contrastive_labels = info_nce_logits(features=con_feats, args=args, curv=model[1].get_curvature())
-            else:
-                contrastive_logits, contrastive_labels = info_nce_logits(features=con_feats, args=args)
-            contrastive_loss = torch.nn.CrossEntropyLoss()(contrastive_logits, contrastive_labels)
+                # In normal contrastive learning we use similarity measures
+                # So we doing cross entropy we assign the target to the positive pair
+                # Such that loss is decreased when positive pairs have higher similarity and negative pairs have lower similarities
+                # In cosine similarity this would correspond to highest being 1 and lowest being -1
+                # In hyperbolic space we use the distance measure, which is the opposite. That is why we take the negative of the distance
+                # We still assign the target to the positive pair
+                # Now positive pairs need lower distance and negative pairs need higher distance (before taking minus of distance)
+                # Since the range has changed from (-1,1) to (-infty to 0) the loss can behave differently. I have not investigated how different that is 
+                if args.hyperbolic:
+                    contrastive_logits, contrastive_labels = info_nce_logits(features=con_feats, args=args, curv=model[1].get_curvature())
+                else:
+                    contrastive_logits, contrastive_labels = info_nce_logits(features=con_feats, args=args)
+                contrastive_loss = torch.nn.CrossEntropyLoss()(contrastive_logits, contrastive_labels)
 
-            # Supervised contrastive loss
-            f1, f2 = [f[mask_lab] for f in features.chunk(2)]
-            sup_con_feats = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-            sup_con_labels = class_labels[mask_lab]
+                # Supervised contrastive loss
+                f1, f2 = [f[mask_lab] for f in features.chunk(2)]
+                sup_con_feats = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+                sup_con_labels = class_labels[mask_lab]
 
-            if args.hyperbolic:
-                sup_con_loss = sup_con_crit(sup_con_feats, labels=sup_con_labels, curv=model[1].get_curvature())
-            else:
-                sup_con_loss = sup_con_crit(sup_con_feats, labels=sup_con_labels)
+                if args.hyperbolic:
+                    sup_con_loss, SCL_log_stats = sup_con_crit(sup_con_feats, labels=sup_con_labels, curv=model[1].get_curvature())
+                else:
+                    sup_con_loss, SCL_log_stats = sup_con_crit(sup_con_feats, labels=sup_con_labels)
 
-            # Total loss
-            loss = (1 - args.sup_con_weight) * contrastive_loss + args.sup_con_weight * sup_con_loss
+                # Total loss
+                loss = (1 - args.sup_con_weight) * contrastive_loss + args.sup_con_weight * sup_con_loss
+                #loss = contrastive_loss
+                if loss.isnan():
+                    print(f"Loss is NaN. con_loss is: {contrastive_loss}, sup_con_loss is: {sup_con_loss}")
+                    #exit()
+                #if contrastive_loss.isnan():
+                #    print(contrastive_logits)
 
-            # Train acc
-            _, pred = contrastive_logits.max(1)
-            acc = (pred == contrastive_labels).float().mean().item()
-            train_acc_record.update(acc, pred.size(0))
+                # Train acc
+                _, pred = contrastive_logits.max(1)
+                acc = (pred == contrastive_labels).float().mean().item()
+                train_acc_record.update(acc, pred.size(0))
 
-            loss_record.update(loss.item(), class_labels.size(0))
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+                loss_record.update(loss.item(), class_labels.size(0))
+                con_loss_record.update(contrastive_loss.item(), class_labels.size(0))
+                sup_con_loss_record.update(sup_con_loss.item(), class_labels.size(0))
+                step_log_dict["step/train/contrastive_loss"] = contrastive_loss.item()
+                step_log_dict["step/train/sup_con_loss"] = sup_con_loss.item()
+                step_log_dict["step/train/full_loss"] = loss.item()
+                step_log_dict["step/train/acc"] = acc
+                step_log_dict["step/train/embed_mean"] = output_log_stats[0][0]
+                step_log_dict["step/train/embed_stddiv"] = output_log_stats[0][1]
+                step_log_dict["step/train/embed_max"] = output_log_stats[0][2]
+                step_log_dict["step/train/embed_min"] = output_log_stats[0][3]
+                step_log_dict["debug/step/train/SCL_logits_mean"] = SCL_log_stats[0][0]
+                step_log_dict["debug/step/train/SCL_logits_stddiv"] = SCL_log_stats[0][1]
+                step_log_dict["debug/step/train/SCL_logits_max"] = SCL_log_stats[0][2]
+                step_log_dict["debug/step/train/SCL_logits_min"] = SCL_log_stats[0][3]
+                step_log_dict["debug/step/train/SCL_exp_logits_mean"] = SCL_log_stats[1][0]
+                step_log_dict["debug/step/train/SCL_exp_logits_stddiv"] = SCL_log_stats[1][1]
+                step_log_dict["debug/step/train/SCL_exp_logits_max"] = SCL_log_stats[1][2]
+                step_log_dict["debug/step/train/SCL_exp_logits_min"] = SCL_log_stats[1][3]
+                step_log_dict["debug/step/train/SCL_exp_logits_masked_mean"] = SCL_log_stats[2][0]
+                step_log_dict["debug/step/train/SCL_exp_logits_masked_stddiv"] = SCL_log_stats[2][1]
+                step_log_dict["debug/step/train/SCL_exp_logits_masked_max"] = SCL_log_stats[2][2]
+                step_log_dict["debug/step/train/SCL_exp_logits_masked_min"] = SCL_log_stats[2][3]
+                step_log_dict["debug/step/train/SCL_log_prob_mean"] = SCL_log_stats[3][0]
+                step_log_dict["debug/step/train/SCL_log_prob_stddiv"] = SCL_log_stats[3][1]
+                step_log_dict["debug/step/train/SCL_log_prob_max"] = SCL_log_stats[3][2]
+                step_log_dict["debug/step/train/SCL_log_prob_min"] = SCL_log_stats[3][3]
+                step_log_dict["debug/step/train/SCL_log_prob_masked_mean"] = SCL_log_stats[4][0]
+                step_log_dict["debug/step/train/SCL_log_prob_masked_stddiv"] = SCL_log_stats[4][1]
+                step_log_dict["debug/step/train/SCL_log_prob_masked_max"] = SCL_log_stats[4][2]
+                step_log_dict["debug/step/train/SCL_log_prob_masked_min"] = SCL_log_stats[4][3]
+                if args.hyperbolic:
+                    step_log_dict["step/train/curvature"] = model[1].get_curvature()
+                    step_log_dict["step/train/proj_alpha"] = model[1].get_proj_alpha()
+                    step_log_dict["step/train/hyp_embed_mean"] = output_log_stats[1][0]
+                    step_log_dict["step/train/hyp_embed_stddiv"] = output_log_stats[1][1]
+                    step_log_dict["step/train/hyp_embed_max"] = output_log_stats[1][2]
+                    step_log_dict["step/train/hyp_embed_min"] = output_log_stats[1][3]
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                wandb.log(step_log_dict)
 
 
-        print('Train Epoch: {} Avg Loss: {:.4f} | Seen Class Acc: {:.4f} '.format(epoch, loss_record.avg,
+        print('Train Epoch: {} Avg Loss: {:.4f} | Seen Class Acc: {:.4f} '.format(epoch+1, loss_record.avg,
                                                                                   train_acc_record.avg))
+        epoch_log_dict = {"epoch": epoch+1, "epoch/train/loss": loss_record.avg, "epoch/train/acc": train_acc_record.avg,
+                          "epoch/train/contrstive_loss": con_loss_record.avg, "epoch/train/sup_con_loss": sup_con_loss_record.avg,
+                          "epoch/train/mean_learning_rate": get_mean_lr(optimizer), "epoch/train/learning_rate": scheduler.get_last_lr()[0]}
+        if args.hyperbolic:
+            print(f"Current curvature: {model[1].get_curvature()}")
+            print(f"Current projection weight: {model[1].get_proj_alpha()}")
+            epoch_log_dict["epoch/train/curvature"] = model[1].get_curvature()
+            epoch_log_dict["epoch/train/proj_alpha"] = model[1].get_proj_alpha()
 
+        if loss.isnan():
+            break
 
-        with torch.no_grad():
+        if args.kmeans and ((epoch+1) % args.kmeans_frequency == 0):
+            with torch.no_grad():
 
-            print('Testing on unlabelled examples in the training data...')
-            all_acc, old_acc, new_acc = test_kmeans(model, unlabelled_train_loader,
-                                                    epoch=epoch, save_name='Train ACC Unlabelled',
-                                                    args=args)
+                print('Testing on unlabelled examples in the training data...')
+                all_acc, old_acc, new_acc = test_kmeans(model, unlabelled_train_loader,
+                                                        epoch=epoch, save_name='Train ACC Unlabelled',
+                                                        args=args)
 
-            print('Testing on disjoint test set...')
-            all_acc_test, old_acc_test, new_acc_test = test_kmeans(model, test_loader,
-                                                                   epoch=epoch, save_name='Test ACC',
-                                                                   args=args)
-
+                #print('Testing on disjoint test set...')
+                #all_acc_test, old_acc_test, new_acc_test = test_kmeans(model, test_loader,
+                #                                                    epoch=epoch, save_name='Test ACC',
+                #                                                    args=args)
+        #exit()
         # ----------------
         # LOG
         # ----------------
@@ -288,27 +389,45 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args):
         args.writer.add_scalar('Train Acc Labelled Data', train_acc_record.avg, epoch)
         args.writer.add_scalar('LR', get_mean_lr(optimizer), epoch)
 
-        print('Train Accuracies: All {:.4f} | Old {:.4f} | New {:.4f}'.format(all_acc, old_acc,
-                                                                              new_acc))
-        print('Test Accuracies: All {:.4f} | Old {:.4f} | New {:.4f}'.format(all_acc_test, old_acc_test,
-                                                                                new_acc_test))
+        if args.kmeans and ((epoch+1) % args.kmeans_frequency == 0):
+            print('Train Accuracies: All {:.4f} | Old {:.4f} | New {:.4f}'.format(all_acc, old_acc,
+                                                                                new_acc))
+            epoch_log_dict["epoch/kmeans/all_acc"] = all_acc
+            epoch_log_dict["epoch/kmeans/old_acc"] = old_acc
+            epoch_log_dict["epoch/kmeans/new_acc"] = new_acc
+            #print('Test Accuracies: All {:.4f} | Old {:.4f} | New {:.4f}'.format(all_acc_test, old_acc_test,
+            #                                                                        new_acc_test))
 
         # Step schedule
-        exp_lr_scheduler.step()
+        scheduler.step()
 
-        torch.save(model.state_dict(), args.model_path)
+        if args.kmeans and ((epoch+1) % args.kmeans_frequency == 0):
+            if old_acc > best_test_acc_lab:
+
+                print('Best Train Accuracies: All {:.4f} | Old {:.4f} | New {:.4f}'.format(all_acc, old_acc,
+                                                                                    new_acc))
+
+                torch.save(model.state_dict(), args.model_path[:-3] + f'_best.pt')
+                print("model saved to {}.".format(args.model_path[:-3] + f'_best.pt'))
+                wandb.save(args.model_path[:-3] + f'_best.pt')
+
+                best_test_acc_lab = old_acc
+        #torch.save(model.state_dict(), args.model_path)
+        args_copy = Namespace(**vars(args))
+        args_copy.writer = None
+        torch.save({
+            "epoch": epoch+1,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
+            "arguments": args_copy,
+            "wandb_run_id": wandb.run.id,
+            "best_test_acc": best_test_acc_lab,
+        }, args.model_path)
         print("model saved to {}.".format(args.model_path))
 
-        if old_acc_test > best_test_acc_lab:
-
-            print(f'Best ACC on old Classes on disjoint test set: {old_acc_test:.4f}...')
-            print('Best Train Accuracies: All {:.4f} | Old {:.4f} | New {:.4f}'.format(all_acc, old_acc,
-                                                                                  new_acc))
-
-            torch.save(model.state_dict(), args.model_path[:-3] + f'_best.pt')
-            print("model saved to {}.".format(args.model_path[:-3] + f'_best.pt'))
-
-            best_test_acc_lab = old_acc_test
+        wandb.log(epoch_log_dict)
+        wandb.save(args.model_path)
 
 
 def test_kmeans(model, test_loader,
@@ -328,11 +447,11 @@ def test_kmeans(model, test_loader,
         images = images.cuda()
 
         # Pass features through base model and then additional learnable transform (linear layer)
-        feats = model(images)
+        feats, _ = model(images)
 
         feats = torch.nn.functional.normalize(feats, dim=-1)
 
-        all_feats.append(feats.cpu().numpy())
+        all_feats.append(feats.cpu().detach().numpy())
         targets = np.append(targets, label.cpu().numpy())
         mask = np.append(mask, np.array([True if x.item() in range(len(args.train_classes))
                                          else False for x in label]))
@@ -343,10 +462,13 @@ def test_kmeans(model, test_loader,
     print('Fitting K-Means...')
     all_feats = np.concatenate(all_feats)
     if args.hyperbolic:
-        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=model[1].get_curvature()).fit(all_feats)
+        #TODO: Investigate why K++ is failing to assign more than one center (Points too close to one another maybe?)
+        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=model[1].get_curvature(), init="random")
+        kmeans.fit(all_feats)
+        preds = kmeans.labels_.numpy()
     else:
         kmeans = KMeans(n_clusters=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0).fit(all_feats)
-    preds = kmeans.labels_
+        preds = kmeans.labels_
     print('Done!')
 
     # -----------------------
@@ -392,7 +514,16 @@ if __name__ == "__main__":
     parser.add_argument('--n_views', default=2, type=int)
     parser.add_argument('--contrast_unlabel_only', type=str2bool, default=False)
 
+    parser.add_argument('--wandb_mode', type=str, default="online")
+    parser.add_argument('--epochs_warmup', default=2, type=int)
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
+    parser.add_argument('--kmeans', type=str2bool, default=False)
+    parser.add_argument('--kmeans_frequency', type=int, default=20)
+    parser.add_argument('--curvature', type=float, default=1.0)
+    parser.add_argument('--freeze_curvature', type=str, default="false")
+    parser.add_argument('--proj_alpha', type=float, default=1.7035**-1)
+    parser.add_argument('--freeze_proj_alpha', type=str, default="false")
+    parser.add_argument('--checkpoint_path', type=str)
 
     # ----------------------
     # INIT
@@ -406,6 +537,9 @@ if __name__ == "__main__":
 
     init_experiment(args, runner_name=['metric_learn_gcd'], exp_id=args.exp_id)
     print(f'Using evaluation function {args.eval_funcs[0]} to print results')
+
+    #global DEBUG_DIR
+    DEBUG_DIR = args.debug_dir
 
     # ----------------------
     # BASE MODEL
@@ -430,7 +564,8 @@ if __name__ == "__main__":
         args.image_size = 224
         args.feat_dim = 768
         args.num_mlp_layers = 3
-        args.mlp_out_dim = 65536
+        #args.mlp_out_dim = 65536
+        args.mlp_out_dim = 768
 
         # ----------------------
         # HOW MUCH OF BASE MODEL TO FINETUNE
@@ -488,14 +623,81 @@ if __name__ == "__main__":
     # PROJECTION HEAD
     # ----------------------
     if args.hyperbolic:
-        projection_head = vits.__dict__['Hyperbolic_DINOHead'](in_dim=args.feat_dim,
-                                                               out_dim=args.mlp_out_dim, nlayers=args.num_mlp_layers, )
+        projection_head = vits.__dict__['Hyperbolic_DINOHead'](in_dim=args.feat_dim, out_dim=args.mlp_out_dim,
+                                                               nlayers=args.num_mlp_layers, curv_init=args.curvature,
+                                                               learn_curv=not args.freeze_curvature.lower() == "full",
+                                                               alpha_init=args.proj_alpha,
+                                                               learn_alpha=not args.freeze_proj_alpha.lower() == "full")
     else:
-        projection_head = vits.__dict__['DINOHead'](in_dim=args.feat_dim,
-                                                    out_dim=args.mlp_out_dim, nlayers=args.num_mlp_layers)
+        projection_head = vits.__dict__['DINOHead'](in_dim=args.feat_dim, out_dim=args.mlp_out_dim,
+                                                    nlayers=args.num_mlp_layers)
     model = torch.nn.Sequential(model, projection_head).to(device)
+    #print(model[1].parameters)
+    #exit()
+
+    # ----------------------
+    # OPTIMIZER AND SCHEDULER
+    # ----------------------
+    optimizer = SGD(vits.get_params_groups(model), lr=args.lr, momentum=args.momentum,
+                    weight_decay=args.weight_decay)
+
+    scheduler = lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=args.epochs,
+            eta_min=args.lr * 1e-3,
+        )
+
+    # ----------------------
+    # LOAD CHECKPOINT
+    # ----------------------
+    checkpoint = {}
+    start_epoch = 0
+    best_test_acc = 0
+    if not args.checkpoint_path is None:
+            checkpoint = torch.load(args.checkpoint_path, map_location=device, weights_only=False)
+            if not "model_state_dict" in checkpoint.keys():
+                model.load_state_dict(checkpoint)
+            else:
+                #checkpoint = torch.load(args.checkpoint_path)
+                model.load_state_dict(checkpoint["model_state_dict"])
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+                start_epoch = checkpoint["epoch"]
+                best_test_acc = checkpoint["best_test_acc"]
+
+    # ----------------------
+    # INITIALIZE WANDB
+    # ----------------------
+    wandb.login()
+    if checkpoint.get("wandb_run_id", None) is None or args.wandb_mode != "online":# or args.wandb_new_id:
+        wandb.init(config = args,
+                #dir = args.save_dir + '/wandb_logs',
+                dir = "wandb_logs/",
+                project = 'Hyperbolic_GCD',
+                name = args.exp_id + '-' + str(args.seed),
+                mode = args.wandb_mode)
+    else:
+        wandb.init(config = args,
+                #dir = args.save_dir + '/wandb_logs',
+                dir = "wandb_logs/",
+                project = 'Hyperbolic_GCD',
+                name = args.exp_id + '-' + str(args.seed),
+                id = checkpoint["wandb_run_id"],
+                resume = 'must',
+                mode = args.wandb_mode)
+    wandb.watch(model, log="all", log_graph=True, log_freq=100)
 
     # ----------------------
     # TRAIN
     # ----------------------
-    train(model, train_loader, test_loader_labelled, test_loader_unlabelled, args)
+    if start_epoch < args.epochs:
+        train(model, train_loader, test_loader_labelled, test_loader_unlabelled, args, optimizer, scheduler,
+              best_test_acc=best_test_acc, start_epoch=start_epoch)
+    #TODO: Make it load and test on best model if inner Kmeans is being used
+    print('Testing on disjoint test set...')
+    all_acc_test, old_acc_test, new_acc_test = test_kmeans(model, test_loader_labelled,
+                                                        epoch=args.epochs, save_name='Test ACC',
+                                                        args=args)
+    print('Test Accuracies: All {:.4f} | Old {:.4f} | New {:.4f}'.format(all_acc_test, old_acc_test,
+                                                                                    new_acc_test))
+    print("Finished training!")
