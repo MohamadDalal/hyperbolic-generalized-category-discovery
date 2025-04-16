@@ -18,8 +18,6 @@ container_path="${HOME}/pytorch-24.08.sif"
 # Dynamically set output and error filenames using job ID and iteration
 outfile="logs/GCD-KMeans-CUB.out"
 
-exp_id="GCD-CUB"
-
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
 #echo "Error file: ${errfile}"
@@ -41,5 +39,5 @@ nvidia-smi
 #echo $EXP_NUM
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.k_means --dataset 'cub' --semi_sup 'True' --use_ssb_splits 'True' \
- --use_best_model 'False' --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id '(17.03.2025_|_22.593)' --K 254
+ --use_best_model 'True' --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id 'Euclidean' --K 550
  #> ${SAVE_DIR}logfile_${EXP_NUM}.out

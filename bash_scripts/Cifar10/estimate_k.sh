@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-KMeans-Aircraft.log"
-#SBATCH --job-name="GCD-KMeans-Aircraft"
+#SBATCH --output="logs/GCD-Estimate-Cifar10.log"
+#SBATCH --job-name="GCD-Estimate-Cifar10"
 #SBATCH --time=12:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
@@ -16,7 +16,7 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-KMeans-Aircraft.out"
+outfile="logs/GCD-Estimate-Cifar10.out"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -27,17 +27,13 @@ echo "Using container: ${container_path}"
 PYTHON='/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/venv/bin/python'
 
 hostname
-nvidia-smi
-
-#export CUDA_VISIBLE_DEVICES=0
 
 # Get unique log file
-#SAVE_DIR=/work/sagar/osr_novel_categories/dev_outputs/
+#SAVE_DIR=/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/dev_outputs
 
 #EXP_NUM=$(ls ${SAVE_DIR} | wc -l)
 #EXP_NUM=$((${EXP_NUM}+1))
 #echo $EXP_NUM
 
-srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.k_means --dataset 'aircraft' --semi_sup 'True' --use_ssb_splits 'True' \
- --use_best_model 'True' --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id 'Euclidean'  #--K 79
- #> ${SAVE_DIR}logfile_${EXP_NUM}.out
+srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.estimate_k.estimate_k --max_classes 1000 --dataset_name cifar10 --search_mode other --warmup_model_exp_id 'Euclidean_best' --hyperbolic 'False'
+        #> ${SAVE_DIR}logfile_${EXP_NUM}.out

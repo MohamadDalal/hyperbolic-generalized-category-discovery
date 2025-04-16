@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-Aircraft.log"
-#SBATCH --job-name="GCD-Aircraft"
+#SBATCH --output="logs/GCD-CUB-Hyperbolic-Freeze-Curvature.log"
+#SBATCH --job-name="GCD-CUB-Hyperbolic-Freeze-Curvature"
 #SBATCH --time=12:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
@@ -16,7 +16,9 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-Aircraft.out"
+outfile="logs/GCD-CUB-Hyperbolic-Freeze-Curvature.out"
+
+exp_id="GCD-CUB-Hyperbolic-Freeze-Curvature"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -39,21 +41,29 @@ nvidia-smi
 #echo $EXP_NUM
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.contrastive_training.contrastive_training \
-            --dataset_name 'aircraft' \
+            --dataset_name 'cub' \
             --batch_size 128 \
             --grad_from_block 11 \
             --epochs 200 \
+            --epochs_warmup 20 \
             --base_model vit_dino \
             --num_workers 16 \
             --use_ssb_splits 'True' \
             --sup_con_weight 0.35 \
             --weight_decay 5e-5 \
             --contrast_unlabel_only 'False' \
+            --exp_id ${exp_id} \
             --transform 'imagenet' \
             --lr 0.1 \
             --eval_funcs 'v1' 'v2' \
-            --exp_id 'Aircraft-Normal-Train' \
-            --hyperbolic 'False' \
+            --exp_id 'CUB-Hyperbolic-Train-Freeze-Curvature' \
+            --hyperbolic 'True' \
             --kmeans 'True' \
-            --kmeans_frequency 20
+            --kmeans_frequency 20 \
+            --curvature '1.0' \
+            --freeze_curvature 'full' \
+            #--proj_alpha '1.0' \
+            #--freeze_proj_alpha 'false' \
 #> ${SAVE_DIR}logfile_${EXP_NUM}.out
+
+#-m methods.contrastive_training.contrastive_training --dataset_name 'cub' --batch_size 128 --grad_from_block 11 --epochs 200 --base_model vit_dino --num_workers 16 --use_ssb_splits 'True' --sup_con_weight 0.35 --weight_decay 5e-5 --contrast_unlabel_only 'False' --exp_id test_exp --transform 'imagenet' --lr 0.1 --eval_funcs 'v1' 'v2'

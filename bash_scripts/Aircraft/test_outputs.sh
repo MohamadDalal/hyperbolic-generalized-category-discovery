@@ -35,5 +35,5 @@ hostname
 #EXP_NUM=$((${EXP_NUM}+1))
 #echo $EXP_NUM
 
-srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.test_outputs.test_outputs --dataset_name aircraft --warmup_model_exp_id '(04.03.2025_|_24.690)_best'
+srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.test_outputs.test_outputs --dataset_name aircraft --warmup_model_exp_id 'Euclidean_best'
         #> ${SAVE_DIR}logfile_${EXP_NUM}.out

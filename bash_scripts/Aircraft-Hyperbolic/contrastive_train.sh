@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-Aircraft.log"
-#SBATCH --job-name="GCD-Aircraft"
+#SBATCH --output="logs/GCD-Aircraft-Hyperbolic.log"
+#SBATCH --job-name="GCD-Aircraft-Hyperbolic"
 #SBATCH --time=12:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
@@ -16,7 +16,7 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-Aircraft.out"
+outfile="logs/GCD-Aircraft-Hyperbolic.out"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -43,6 +43,7 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --batch_size 128 \
             --grad_from_block 11 \
             --epochs 200 \
+            --epochs_warmup 20 \
             --base_model vit_dino \
             --num_workers 16 \
             --use_ssb_splits 'True' \
@@ -52,8 +53,10 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --transform 'imagenet' \
             --lr 0.1 \
             --eval_funcs 'v1' 'v2' \
-            --exp_id 'Aircraft-Normal-Train' \
-            --hyperbolic 'False' \
+            --exp_id 'Aircraft-Hyperbolic-Train' \
+            --hyperbolic 'True' \
             --kmeans 'True' \
-            --kmeans_frequency 20
+            --kmeans_frequency 20 \
+            --curvature '1.0' \
+            --freeze_curvature 'false' \
 #> ${SAVE_DIR}logfile_${EXP_NUM}.out

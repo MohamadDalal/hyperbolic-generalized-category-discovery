@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-KMeans-Aircraft.log"
-#SBATCH --job-name="GCD-KMeans-Aircraft"
+#SBATCH --output="logs/GCD-Extract-Cifar100-Hyperbolic.log"
+#SBATCH --job-name="GCD-Extract-Cifar100-Hyperbolic"
 #SBATCH --time=12:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
@@ -16,7 +16,7 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-KMeans-Aircraft.out"
+outfile="logs/GCD-Extract-Cifar100-Hyperbolic.out"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -31,13 +31,6 @@ nvidia-smi
 
 #export CUDA_VISIBLE_DEVICES=0
 
-# Get unique log file
-#SAVE_DIR=/work/sagar/osr_novel_categories/dev_outputs/
-
-#EXP_NUM=$(ls ${SAVE_DIR} | wc -l)
-#EXP_NUM=$((${EXP_NUM}+1))
-#echo $EXP_NUM
-
-srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.k_means --dataset 'aircraft' --semi_sup 'True' --use_ssb_splits 'True' \
- --use_best_model 'True' --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id 'Euclidean'  #--K 79
- #> ${SAVE_DIR}logfile_${EXP_NUM}.out
+srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset cifar100 --use_best_model 'True' \
+ --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/Cifar100-Hyperbolic-Train/checkpoints/model.pt' \
+ --exp_id '_Hyperbolic' --hyperbolic 'True'

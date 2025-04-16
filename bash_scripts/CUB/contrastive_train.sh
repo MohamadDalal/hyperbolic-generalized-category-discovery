@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=16G
 # #SBATCH --nodelist=ailab-l4-07
-# #SBATCH --exclude=nv-ai-03
+#SBATCH --exclude=ailab-l4-02
 
 #####################################################################################
 
@@ -54,7 +54,11 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --exp_id ${exp_id} \
             --transform 'imagenet' \
             --lr 0.1 \
-            --eval_funcs 'v1' 'v2' 
+            --eval_funcs 'v1' 'v2' \
+            --exp_id 'CUB-Normal-Train' \
+            --hyperbolic 'False' \
+            --kmeans 'True' \
+            --kmeans_frequency 20
 #> ${SAVE_DIR}logfile_${EXP_NUM}.out
 
 #-m methods.contrastive_training.contrastive_training --dataset_name 'cub' --batch_size 128 --grad_from_block 11 --epochs 200 --base_model vit_dino --num_workers 16 --use_ssb_splits 'True' --sup_con_weight 0.35 --weight_decay 5e-5 --contrast_unlabel_only 'False' --exp_id test_exp --transform 'imagenet' --lr 0.1 --eval_funcs 'v1' 'v2'

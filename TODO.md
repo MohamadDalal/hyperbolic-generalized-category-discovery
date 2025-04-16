@@ -1,0 +1,2 @@
+- Make a proper configuration file. This time using a better format than JSON (one that supports comments)
+- ~~Freeze curvature training for warmup epochs~~

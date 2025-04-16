@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-Aircraft.log"
-#SBATCH --job-name="GCD-Aircraft"
+#SBATCH --output="logs/GCD-Cifar10.log"
+#SBATCH --job-name="GCD-Cifar10"
 #SBATCH --time=12:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
@@ -16,7 +16,7 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-Aircraft.out"
+outfile="logs/GCD-Cifar10.out"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -39,7 +39,7 @@ nvidia-smi
 #echo $EXP_NUM
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.contrastive_training.contrastive_training \
-            --dataset_name 'aircraft' \
+            --dataset_name 'cifar10' \
             --batch_size 128 \
             --grad_from_block 11 \
             --epochs 200 \
@@ -52,8 +52,9 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --transform 'imagenet' \
             --lr 0.1 \
             --eval_funcs 'v1' 'v2' \
-            --exp_id 'Aircraft-Normal-Train' \
+            --exp_id 'Cifar10-Normal-Train' \
             --hyperbolic 'False' \
             --kmeans 'True' \
-            --kmeans_frequency 20
+            --kmeans_frequency 20 \
+            --checkpoint_path '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/Cifar10-Normal-Train/checkpoints/model.pt'
 #> ${SAVE_DIR}logfile_${EXP_NUM}.out
