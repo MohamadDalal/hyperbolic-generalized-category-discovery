@@ -20,6 +20,7 @@ from functools import partial
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from torch.nn.init import trunc_normal_
 
@@ -315,7 +316,8 @@ class DINOHead(nn.Module):
 
 class Hyperbolic_DINOHead(nn.Module):
     def __init__(self, in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256,
-                 curv_init: float = 1.0, alpha_init: float = 1.0, learn_curv: bool = True, learn_alpha: bool = True):
+                 curv_init: float = 1.0, alpha_init: float = 1.0, learn_curv: bool = True, learn_alpha: bool = True,
+                 euclidean_clip_value = None):
         super().__init__()
         # Initialize curvature parameter. Hyperboloid curvature will be `-curv`.
         # Curvature is learned in log space
@@ -334,6 +336,7 @@ class Hyperbolic_DINOHead(nn.Module):
         #self.proj_alpha = nn.Parameter(torch.tensor(1.7035**-1).log(), requires_grad=learn_alpha)
         #self.proj_alpha = nn.Parameter(torch.tensor(1).log(), requires_grad=learn_alpha)
         self.proj_alpha = nn.Parameter(torch.tensor(alpha_init).log(), requires_grad=learn_alpha)
+        self.euclidean_clip_value = euclidean_clip_value
         
         nlayers = max(nlayers, 1)
         if nlayers == 1:
@@ -383,7 +386,16 @@ class Hyperbolic_DINOHead(nn.Module):
         #print(x.mean(dim=0))
         #print(x_norm.mean(), x_norm.std())
         log_stats.append((x_norm.mean(), x_norm.std(), x_norm.max(), x_norm.min()))
+        if self.euclidean_clip_value is not None:
+            # This is done to prevent vanishing gradients according to Guo et al. "Clipped Hyperbolic Classifiers Are Super-Hyperbolic Classifiers"
+            x = torch.where(x.norm(dim=-1, keepdim=True) < self.euclidean_clip_value, x, self.euclidean_clip_value*F.normalize(x, dim=-1))
+            x_norm = torch.norm(x, dim=1)
+            clipped_norm1 = (x_norm.mean(), x_norm.std(), x_norm.max(), x_norm.min())
+            #for i in (x_norm.mean(), x_norm.std(), x_norm.max(), x_norm.min()):
+            #    log_stats[0].append(i)
         x = x * self.proj_alpha.exp()
+        x_norm = torch.norm(x, dim=1)
+        clipped_norm2 = (x_norm.mean(), x_norm.std(), x_norm.max(), x_norm.min())
         #with torch.autocast(self.device.type, dtype=torch.float32):
         with torch.autocast("cuda", dtype=torch.float32):
             x = L.exp_map0(x, self.curv.exp())
@@ -395,6 +407,9 @@ class Hyperbolic_DINOHead(nn.Module):
         #print(x_norm.mean(), x_norm.std())
         log_stats.append((x_norm.mean(), x_norm.std(), x_norm.max(), x_norm.min()))
         #print(x)
+        if self.euclidean_clip_value is not None:
+            log_stats.append(clipped_norm1)
+            log_stats.append(clipped_norm2)
         return x, log_stats
     
     def train_curvature(self, train = True):

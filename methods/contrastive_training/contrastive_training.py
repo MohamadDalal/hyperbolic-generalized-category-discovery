@@ -285,6 +285,7 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
                     contrastive_logits, contrastive_labels = info_nce_logits(features=con_feats, args=args, curv=model[1].get_curvature())
                 else:
                     contrastive_logits, contrastive_labels = info_nce_logits(features=con_feats, args=args)
+                # TODO: Do we need to use a hyperbolic cross entropy loss? I forgot to consider that.
                 contrastive_loss = torch.nn.CrossEntropyLoss()(contrastive_logits, contrastive_labels)
 
                 # Supervised contrastive loss
@@ -343,6 +344,15 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
                 step_log_dict["debug/step/train/SCL_log_prob_masked_max"] = SCL_log_stats[4][2]
                 step_log_dict["debug/step/train/SCL_log_prob_masked_min"] = SCL_log_stats[4][3]
                 if args.hyperbolic:
+                    if args.euclidean_clipping is not None:
+                        step_log_dict["step/train/cliped_embed_mean"] = output_log_stats[2][0]
+                        step_log_dict["step/train/cliped_embed_stddiv"] = output_log_stats[2][1]
+                        step_log_dict["step/train/cliped_embed_max"] = output_log_stats[2][2]
+                        step_log_dict["step/train/cliped_embed_min"] = output_log_stats[2][3]
+                        step_log_dict["step/train/cliped_embed2_mean"] = output_log_stats[3][0]
+                        step_log_dict["step/train/cliped_embed2_stddiv"] = output_log_stats[3][1]
+                        step_log_dict["step/train/cliped_embed2_max"] = output_log_stats[3][2]
+                        step_log_dict["step/train/cliped_embed2_min"] = output_log_stats[3][3] 
                     step_log_dict["step/train/curvature"] = model[1].get_curvature()
                     step_log_dict["step/train/proj_alpha"] = model[1].get_proj_alpha()
                     step_log_dict["step/train/hyp_embed_mean"] = output_log_stats[1][0]
@@ -351,6 +361,7 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
                     step_log_dict["step/train/hyp_embed_min"] = output_log_stats[1][3]
                 optimizer.zero_grad()
                 loss.backward()
+                # Add gradient clipping or normalization here
                 optimizer.step()
                 wandb.log(step_log_dict)
 
@@ -520,6 +531,7 @@ if __name__ == "__main__":
     parser.add_argument('--kmeans', type=str2bool, default=False)
     parser.add_argument('--kmeans_frequency', type=int, default=20)
     parser.add_argument('--curvature', type=float, default=1.0)
+    parser.add_argument('--euclidean_clipping', type=float, default=None)
     parser.add_argument('--freeze_curvature', type=str, default="false")
     parser.add_argument('--proj_alpha', type=float, default=1.7035**-1)
     parser.add_argument('--freeze_proj_alpha', type=str, default="false")
@@ -627,7 +639,8 @@ if __name__ == "__main__":
                                                                nlayers=args.num_mlp_layers, curv_init=args.curvature,
                                                                learn_curv=not args.freeze_curvature.lower() == "full",
                                                                alpha_init=args.proj_alpha,
-                                                               learn_alpha=not args.freeze_proj_alpha.lower() == "full")
+                                                               learn_alpha=not args.freeze_proj_alpha.lower() == "full",
+                                                               euclidean_clip_value=args.euclidean_clipping)
     else:
         projection_head = vits.__dict__['DINOHead'](in_dim=args.feat_dim, out_dim=args.mlp_out_dim,
                                                     nlayers=args.num_mlp_layers)
