@@ -218,7 +218,7 @@ def einstein_midpoint(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
     midpoint_klein = torch.sum(x, dim=0) / (curv**0.5 * torch.sum(x_time))
     # Transform back to Lorentz
     midpoint_time = torch.sqrt(1 / (curv - curv**2*torch.sum(midpoint_klein**2, dim=-1)))
-    midpoint = torch.sqrt(curv) * midpoint_time * midpoint_klein
+    midpoint = curv**2 * midpoint_time * midpoint_klein
     return midpoint
 
 # This centroid is numerically unstable due to transforming to Klein and back
