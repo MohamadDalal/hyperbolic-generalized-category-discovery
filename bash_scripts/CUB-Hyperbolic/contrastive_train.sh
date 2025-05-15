@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem=16G
 # #SBATCH --nodelist=ailab-l4-07
-#SBATCH --exclude=ailab-l4-02
+# #SBATCH --exclude=ailab-l4-02
 
 #####################################################################################
 
@@ -55,7 +55,7 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --exp_id ${exp_id} \
             --transform 'imagenet' \
             --lr 0.1 \
-            --eval_funcs 'v1' 'v2' \
+            --eval_funcs 'v2' \
             --exp_id 'CUB-Hyperbolic-Train' \
             --hyperbolic 'True' \
             --kmeans 'True' \
