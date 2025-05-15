@@ -22,6 +22,7 @@ from project_utils.cluster_and_log_utils import log_accs_from_preds
 from config import exp_root, dino_pretrain_path
 
 import project_utils.lorentz as L
+import project_utils.poincare as P
 from methods.clustering.faster_mix_k_means_pytorch import K_Means as SemiSupKMeans
 import wandb
 from argparse import Namespace
@@ -37,12 +38,13 @@ class SupConLoss(torch.nn.Module):
     It also supports the unsupervised contrastive loss in SimCLR
     From: https://github.com/HobbitLong/SupContrast"""
     def __init__(self, temperature=0.07, contrast_mode='all',
-                 base_temperature=0.07, hyperbolic=False):
+                 base_temperature=0.07, hyperbolic=False, poincare=False):
         super(SupConLoss, self).__init__()
         self.temperature = temperature
         self.contrast_mode = contrast_mode
         self.base_temperature = base_temperature
         self.hyperbolic = hyperbolic
+        self.poincare = poincare
 
     def forward(self, features, labels=None, mask=None, curv=1.0):
         """Compute loss for model. If both `labels` and `mask` are None,
@@ -95,7 +97,10 @@ class SupConLoss(torch.nn.Module):
         # compute logits. DONE: Make sure that the direction of the values is correct after stabilizing
         if self.hyperbolic:
             # Result of this: Highest distance will be lowest value. Lowest distance will be 0
-            minus_distance = - L.pairwise_dist(anchor_feature, contrast_feature, curv=curv, eps=1e-6) / self.temperature
+            if self.poincare:
+                minus_distance = - P.pairwise_dist(anchor_feature, contrast_feature, curv=-curv, eps=1e-6) / self.temperature
+            else:
+                minus_distance = - L.pairwise_dist(anchor_feature, contrast_feature, curv=curv, eps=1e-6) / self.temperature
             M = minus_distance
 
             # for numerical stability, as soft max is translation invariant
@@ -182,7 +187,10 @@ def info_nce_logits(features, args, curv=1.0):
     labels = labels.to(device)
 
     if args.hyperbolic:
-        similarity_matrix = - L.pairwise_dist(features, features, curv=curv, eps=1e-6)
+        if args.poincare:
+            similarity_matrix = - P.pairwise_dist(features, features, curv=-curv, eps=1e-6)
+        else:
+            similarity_matrix = - L.pairwise_dist(features, features, curv=curv, eps=1e-6)
         if True in similarity_matrix.isnan():
             #print(similarity_matrix)
             print("Hyperbolic distance is NaN")
@@ -225,10 +233,11 @@ def info_nce_logits(features, args, curv=1.0):
 
 
 def train(model, train_loader, test_loader, unlabelled_train_loader, args, optimizer, scheduler,
-          best_test_acc = 0, start_epoch = 0):
+          best_test_acc = 0, start_epoch = 0, best_loss = 1e10):
 
-    sup_con_crit = SupConLoss(hyperbolic=args.hyperbolic)
+    sup_con_crit = SupConLoss(hyperbolic=args.hyperbolic, poincare=args.poincare)
     best_test_acc_lab = best_test_acc
+    best_loss = best_loss 
     freeze_curv_for_warmup = args.freeze_curvature.lower() == "warmup" and args.hyperbolic
     if freeze_curv_for_warmup:
         model[1].train_curvature(False)
@@ -424,6 +433,15 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
 
                 best_test_acc_lab = old_acc
         #torch.save(model.state_dict(), args.model_path)
+
+        if loss_record.avg < best_loss:
+            print('Best Average Loss: {:.4f}'.format(loss_record.avg))
+            torch.save(model.state_dict(), args.model_path[:-3] + f'_best_loss.pt')
+            print("model saved to {}.".format(args.model_path[:-3] + f'_best_loss.pt'))
+            wandb.save(args.model_path[:-3] + f'_best_loss.pt')
+
+            best_loss = loss_record.avg
+
         args_copy = Namespace(**vars(args))
         args_copy.writer = None
         torch.save({
@@ -434,6 +452,7 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
             "arguments": args_copy,
             "wandb_run_id": wandb.run.id,
             "best_test_acc": best_test_acc_lab,
+            "best_loss": best_loss
         }, args.model_path)
         print("model saved to {}.".format(args.model_path))
 
@@ -528,6 +547,7 @@ if __name__ == "__main__":
     parser.add_argument('--wandb_mode', type=str, default="online")
     parser.add_argument('--epochs_warmup', default=2, type=int)
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
+    parser.add_argument('--poincare', action='store_true', default=False)
     parser.add_argument('--kmeans', type=str2bool, default=False)
     parser.add_argument('--kmeans_frequency', type=int, default=20)
     parser.add_argument('--curvature', type=float, default=1.0)
@@ -640,6 +660,7 @@ if __name__ == "__main__":
                                                                learn_curv=not args.freeze_curvature.lower() == "full",
                                                                alpha_init=args.proj_alpha,
                                                                learn_alpha=not args.freeze_proj_alpha.lower() == "full",
+                                                               poincare = args.poincare,
                                                                euclidean_clip_value=args.euclidean_clipping)
     else:
         projection_head = vits.__dict__['DINOHead'](in_dim=args.feat_dim, out_dim=args.mlp_out_dim,
@@ -677,6 +698,7 @@ if __name__ == "__main__":
                 scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
                 start_epoch = checkpoint["epoch"]
                 best_test_acc = checkpoint["best_test_acc"]
+                best_loss = checkpoint["best_loss"]
 
     # ----------------------
     # INITIALIZE WANDB
@@ -705,7 +727,7 @@ if __name__ == "__main__":
     # ----------------------
     if start_epoch < args.epochs:
         train(model, train_loader, test_loader_labelled, test_loader_unlabelled, args, optimizer, scheduler,
-              best_test_acc=best_test_acc, start_epoch=start_epoch)
+              best_test_acc=best_test_acc, start_epoch=start_epoch, best_loss=best_loss)
     #TODO: Make it load and test on best model if inner Kmeans is being used
     print('Testing on disjoint test set...')
     all_acc_test, old_acc_test, new_acc_test = test_kmeans(model, test_loader_labelled,

@@ -201,10 +201,30 @@ Note that the Lorentz factor is:
 
 $$\gamma=\frac{1}{\sqrt{1-c||x_K||^2}}=\sqrt{c}x_{time}$$
 
+Because from previous derivation we have:
+
+$$x_{time} = \frac{1}{\sqrt{c-c^2||x_K||^2}}$$
+
 The Einstein midpoint formula is:
 
-$$P=\frac{\sum_{i=1}^{B}{\gamma_i x_{K,i}}}{\sum_{i=1}^{B}{\gamma_i}}=\frac{\sum_{i=1}^{B}{\sqrt{c}x_{time, i}\frac{x_{space, i}}{\sqrt{c}x_{time,i}}}}{\sum_{i=1}^{B}{\sqrt{c}x_{time,i}}}=\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sum_{i=1}^{B}{\sqrt{c}x_{time,i}}}$$
+$$P=\frac{\sum_{i=1}^{B}{\gamma_i x_{K,i}}}{\sum_{i=1}^{B}{\gamma_i}}=\frac{\sum_{i=1}^{B}{\sqrt{c}x_{time, i}\frac{x_{space, i}}{\sqrt{c}x_{time,i}}}}{\sum_{i=1}^{B}{\sqrt{c}x_{time,i}}}=\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sum_{i=1}^{B}{\sqrt{c}x_{time,i}}}=\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sqrt{c}\sum_{i=1}^{B}{x_{time,i}}}$$
 
+$$P=\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sum_{i=1}^{B}{\sqrt{c}x_{time,i}}}=\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sum_{i=1}^{B}{\sqrt{c}\sqrt{1/c+||x_{space,i}||^2}}}=\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sum_{i=1}^{B}{\sqrt{1+c||x_{space}||^2}}}$$
+
+Mohamad from 2 months later: I just realized that this Einstein midpoint is still in Klein space and I need project it back to Lorentz. Oops, so here I go:
+
+$$x_{time}=\frac{1}{\sqrt{c-c^2||P||^2}}=\left(\sqrt{c-c^2\left||\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sum_{i=1}^{B}{\sqrt{c}x_{time,i}}}|\right|^2}\right)^{-1}$$
+
+$$x_{time}=\left(\sqrt{c-\left(\frac{c}{\sum_{i=1}^{B}{\sqrt{c}x_{time,i}}}\right)^2\left||\sum_{i=1}^{B}{x_{space, i}}|\right|^2}\right)^{-1}$$
+
+$$x_{time}=\left(\sqrt{c-\frac{c}{(\sum_{i=1}^{B}{x_{time,i}})^2}\left||\sum_{i=1}^{B}{x_{space, i}}|\right|^2}\right)^{-1}$$
+
+$$x_{time}=\left(\sqrt{c}\sqrt{1-\frac{1}{(\sum_{i=1}^{B}{x_{time,i}})^2}\left||\sum_{i=1}^{B}{x_{space, i}}|\right|^2}\right)^{-1}$$
+
+With this we can find $x_{space}$:
+$$x_{space}=\sqrt{c}x_{time}P=\frac{\sqrt{c}}{\sqrt{c-\frac{c}{(\sum_{i=1}^{B}{x_{time,i}})^2}\left||\sum_{i=1}^{B}{x_{space, i}}|\right|^2}}\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sqrt{c}\sum_{i=1}^{B}{x_{time,i}}}$$
+
+$$x_{space}=\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sum_{i=1}^{B}{x_{time,i}}\sqrt{c-\frac{c}{(\sum_{i=1}^{B}{x_{time,i}})^2}\left||\sum_{i=1}^{B}{x_{space, i}}|\right|^2}}$$
 ## Klein exponential map from Poincare
 
 **Note: All the following only works with the map at origin**
@@ -299,3 +319,53 @@ I have tried adding an epsilon making the loss function to:
 $$-\frac{1}{|N(i)|}\sum_{j\in N(i)}{\log\left(\frac{e^{-d_L(x_i, x_j)}}{\left(\sum^N_{k=0}{1_{k!=i}e^{-d_L(x_i, x_k)}}\right)+\varepsilon}\right)}=\frac{1}{|N(i)|}\sum_{j\in N(i)}{\log\left(\frac{\left(\sum^N_{k=0}{1_{k!=i}e^{-d_L(x_i, x_k)}}\right)+\varepsilon}{e^{-d_L(x_i, x_j)}}\right)}$$
 
 It is very easy for values to 
+
+## Poincare distance simplification
+
+The Poincare distance is given as:
+
+$$D_P(x,y,c)=\frac{2}{\sqrt{c}}\tanh^{-1}(\sqrt{c}||-x\oplus_c y||)$$
+
+Where:
+
+$$x\oplus_c y=\frac{(1-2c<x,y>-c||y||^2)x+(1+c||x||^2)y}{1-2c<x,y>+c^2||x||^2||y||^2}, c<0$$
+
+In the code I can see that the distance is simplified to:
+
+$$D_P(x,y,c)=\frac{2}{\sqrt{c}}\tanh^{-1}{\left(\frac{||x||^2-2<x,y>+||y||^2}{1+2c<x,y>+c^2||x||^2||y||^2}\right)}$$
+
+I am assuming this simplification requires c>0. Meaning that this simplification occured:
+
+$$\sqrt{c}\left||\frac{-(1+2c<-x,y>+c||y||^2)x+(1-c||x||^2)y}{1+2c<-x,y>+c^2||x||^2||y||^2}|\right|=\frac{||x||^2-2<x,y>+||y||^2}{1+2c<x,y>+c^2||x||^2||y||^2}$$
+
+I will try to see how this is done here with c>0:
+
+$$\sqrt{c}\left||\frac{-(1+2c<-x,y>+c||y||^2)x+(1-c||x||^2)y}{1+2c<-x,y>+c^2||x||^2||y||^2}|\right|=$$
+$$=\frac{\sqrt{c}}{1+2c<-x,y>+c^2||x||^2||y||^2}||-(1+2c<-x,y>+c||y||^2)x+(1-c||x||^2)y||=$$
+$$=K||-(1+2c<-x,y>+c||y||^2)x+(1-c||x||^2)y||$$
+
+I cannot really see how they did it, and I am not trusting a formula I cannot reach myself. Furthermore, both the hyperbolic vision survey and the hyperbolic geometry books have a different distance formula that comes from transforming from Lorentz space, while this one comes from Mobius algebra. Both can be viable, but I will work with the one from the book:
+
+$$D_P(x,y,c)=\frac{1}{\sqrt{c}}\cosh^{-1}{\left(1+\frac{2||x-y||^2}{(1-||x||^2)(1-||y||^2)}\right)}$$
+
+I will need to figure out a way to do the numerator in pytorch, but the rest should be simple.
+
+## Einstein midpoint in Poincare
+
+The transformations between Poincare and Klein are:
+
+$$x_K = \frac{2x_P}{1+c||x_P||^2}$$
+
+$$x_P = \frac{x_K}{1+\sqrt{1-c||x_K||^2}}$$
+
+The Einstein midpoint in Klein is:
+
+$$P = \frac{\sum^B_{i=1}{\gamma_i x_{K,i}}}{\sum^B_{i=1}{\gamma_i}} = \frac{\sum^B_{i=1}{\gamma_i \frac{2x_{P,i}}{1+c||x_{P,i}||^2}}}{\sum^B_{i=1}{\gamma_i}}$$
+
+and:
+
+$$\gamma_i = \frac{1}{\sqrt{1-c||x_{K,i}||^2}}=\left(\sqrt{1-c\left||\frac{2x_{P,i}}{1+c||x_{P,i}||^2}|\right|^2}\right)^{-1}$$
+
+$$\gamma_i = \left(\sqrt{1-\frac{4c}{(1+c||x_{P,i}||^2)^2}||x_{P,i}||^2}\right)^{-1}$$
+
+To be honest. I think the best way to go about this is to convert all to Klein, find the midpoint and convert back. There is not much simplification here.

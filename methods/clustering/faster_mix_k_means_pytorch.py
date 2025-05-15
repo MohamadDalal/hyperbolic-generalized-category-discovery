@@ -5,6 +5,7 @@ from project_utils.cluster_utils import cluster_acc
 from sklearn.utils._joblib import Parallel, delayed, effective_n_jobs
 from sklearn.utils import check_random_state
 import project_utils.lorentz as L
+import project_utils.poincare as P
 import torch
 
 def pairwise_distance(data1, data2, batch_size=None):
@@ -50,7 +51,7 @@ class K_Means:
 
     def __init__(self, k=3, tolerance=1e-4, max_iterations=100, init='k-means++',
                  n_init=10, random_state=None, n_jobs=None, pairwise_batch_size=None, mode=None,
-                 hyperbolic=False, curv = 1.0):
+                 hyperbolic=False, curv = 1.0, poincare=False):
         self.k = k
         self.tolerance = tolerance
         self.max_iterations = max_iterations
@@ -62,6 +63,7 @@ class K_Means:
         self.mode = mode
         self.hyperbolic = hyperbolic
         self.curv = curv
+        self.poincare = poincare
 
     def split_for_val(self, l_feats, l_targets, val_prop=0.2):
 
@@ -100,8 +102,11 @@ class K_Means:
         while C.shape[0] < k:
 
             if self.hyperbolic:
-                # TODO: Consider adding batching to Lorentz pairwise distance if needed
-                dist = L.pairwise_dist(X, C, curv = self.curv)
+                # TODO: Consider adding batching to Lorentz and Poincare pairwise distance if needed
+                if self.poincare:
+                    dist = P.pairwise_dist(X, C, curv = -self.curv)
+                else:
+                    dist = L.pairwise_dist(X, C, curv = self.curv)
             else:
                 dist = pairwise_distance(X, C, self.pairwise_batch_size)
             dist = dist.view(-1, C.shape[0])
@@ -147,7 +152,10 @@ class K_Means:
 
             centers_old = centers.clone()
             if self.hyperbolic:
-                dist = L.pairwise_dist(X, centers, curv = self.curv)
+                if self.poincare:
+                    dist = P.pairwise_dist(X, centers, curv = -self.curv)
+                else:
+                    dist = L.pairwise_dist(X, centers, curv = self.curv)
             else:
                 dist = pairwise_distance(X, centers, self.pairwise_batch_size)
             mindist, labels = torch.min(dist, dim=1)
@@ -156,8 +164,14 @@ class K_Means:
             for idx in range(self.k):
                 selected = torch.nonzero(labels == idx).squeeze()
                 selected = torch.index_select(X, 0, selected)
-                centers[idx] = L.einstein_midpoint(selected, self.curv) if self.hyperbolic else selected.mean(dim=0)
-                #centers[idx] = selected.mean(dim=0)
+                if self.hyperbolic:
+                    if self.poincare:
+                        centers[idx] = P.einstein_midpoint(selected, -self.curv)
+                    else:
+                        centers[idx] = L.einstein_midpoint(selected, self.curv)
+                else:
+                    #centers[idx] = L.einstein_midpoint(selected, self.curv) if self.hyperbolic else selected.mean(dim=0)
+                    centers[idx] = selected.mean(dim=0)
 
             if best_inertia is None or inertia < best_inertia:
                 best_labels = labels.clone()
@@ -165,7 +179,10 @@ class K_Means:
                 best_inertia = inertia
 
             if self.hyperbolic:
-                center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv))
+                if self.poincare:
+                    center_shift = torch.sum(P.elementwise_dist(centers, centers_old, curv = -self.curv))
+                else:
+                    center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv))
             else:
                 center_shift = torch.sum(torch.sqrt(torch.sum((centers - centers_old) ** 2, dim=1)))
             if center_shift ** 2 < self.tolerance:
@@ -186,7 +203,10 @@ class K_Means:
         # Checked. It does not, so I am now using Einstein midpoint
         if self.hyperbolic:
         #if False:
-            l_centers = torch.stack([L.einstein_midpoint(l_feats[idx_list], self.curv) for idx_list in support_idxs])
+            if self.poincare:
+                l_centers = torch.stack([P.einstein_midpoint(l_feats[idx_list], -self.curv) for idx_list in support_idxs])
+            else:
+                l_centers = torch.stack([L.einstein_midpoint(l_feats[idx_list], self.curv) for idx_list in support_idxs])
         else:
             l_centers = torch.stack([l_feats[idx_list].mean(0) for idx_list in support_idxs])
         cat_feats = torch.cat((l_feats, u_feats))
@@ -212,18 +232,24 @@ class K_Means:
             centers_old = centers.clone()
 
             if self.hyperbolic:
-                dist = L.pairwise_dist(u_feats, centers, curv = self.curv)
+                if self.poincare:
+                    dist = P.pairwise_dist(cat_feats, centers, curv = -self.curv)
+                else:
+                    dist = L.pairwise_dist(u_feats, centers, curv = self.curv)
             else:
                 dist = pairwise_distance(u_feats, centers, self.pairwise_batch_size)
             u_mindist, u_labels = torch.min(dist, dim=1)
             u_inertia = u_mindist.sum()
             if self.hyperbolic:
                 # DONE: Optimize by not having to take pairwise distance
-                #l_dist = L.pairwise_dist(l_feats, centers, curv = self.curv)
-                # Get the distance to the corresponding label's center
-                #l_mindist = l_dist[torch.arange(l_num), labels[:l_num]]
-                #l_mindist, _ = torch.min(l_dist, dim=1)
-                l_mindist = L.elementwise_dist(l_feats, centers[labels[:l_num]], curv = self.curv)
+                if self.poincare:
+                    l_mindist = L.elementwise_dist(l_feats, centers[labels[:l_num]], curv = -self.curv)
+                else:
+                    #l_dist = L.pairwise_dist(l_feats, centers, curv = self.curv)
+                    # Get the distance to the corresponding label's center
+                    #l_mindist = l_dist[torch.arange(l_num), labels[:l_num]]
+                    #l_mindist, _ = torch.min(l_dist, dim=1)
+                    l_mindist = L.elementwise_dist(l_feats, centers[labels[:l_num]], curv = self.curv)
             else:
                 # Done: Investigate how the hell this works. l_feats and centers are not the same shape afaik
                 # Might have to do with the assignment inside centers. Just looked, it does
@@ -236,8 +262,14 @@ class K_Means:
 
                 selected = torch.nonzero(labels == idx).squeeze()
                 selected = torch.index_select(cat_feats, 0, selected)
-                centers[idx] = L.einstein_midpoint(selected, self.curv) if self.hyperbolic else selected.mean(dim=0)
-                #centers[idx] = selected.mean(dim=0)
+                if self.hyperbolic:
+                    if self.poincare:
+                        centers[idx] = P.einstein_midpoint(selected, -self.curv)
+                    else:
+                        centers[idx] = L.einstein_midpoint(selected, self.curv)
+                else:
+                    #centers[idx] = L.einstein_midpoint(selected, self.curv) if self.hyperbolic else selected.mean(dim=0)
+                    centers[idx] = selected.mean(dim=0)
 
             if best_inertia is None or inertia < best_inertia:
                 best_labels = labels.clone()
@@ -246,7 +278,10 @@ class K_Means:
 
             # DONE: Add hyperbolic distance
             if self.hyperbolic:
-                center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv))
+                if self.poincare:
+                    center_shift = torch.sum(P.elementwise_dist(centers, centers_old, curv = -self.curv))
+                else:
+                    center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv))
             else:
                 center_shift = torch.sum(torch.sqrt(torch.sum((centers - centers_old) ** 2, dim=1)))
 
