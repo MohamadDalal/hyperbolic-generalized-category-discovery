@@ -287,11 +287,17 @@ def lorentz_centroid(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
         Tensor of shape `(1, D)` giving the Einstein midpoint of input vectors.
     """
     #B, D = x.shape
+    # Create time-like vector
     x_time = torch.sqrt(1 / curv + torch.sum(x**2, dim=-1, keepdim=False))
     mu_TL_space = torch.mean(x, dim=0)
     mu_TL_time = torch.mean(x_time, dim=0)
+    # Scale that time-like vector back to the hyperboloid
     denom = torch.sqrt(curv*torch.abs(mu_TL_space.pow(2).sum(dim=-1) - mu_TL_time**2))
-    return mu_TL_space / denom
+    center = mu_TL_space / denom
+    #assert torch.sqrt(1 / curv + torch.sum(center**2, dim=-1, keepdim=False)).eq(mu_TL_time/denom).all(), "Center is not on the hyperboloid"
+    assert torch.isclose(torch.sqrt(1 / curv + torch.sum(center**2, dim=-1, keepdim=False)), mu_TL_time/denom, atol=1e-5).all(), "Center is not on the hyperboloid"
+    assert torch.isclose(center.pow(2).sum(dim=-1) - (mu_TL_time/denom)**2, torch.tensor(-1/curv)) , "Center is not on the hyperboloid"
+    return center
 
 def half_aperture(
     x: Tensor, curv: float | Tensor = 1.0, min_radius: float = 0.1, eps: float = 1e-8
