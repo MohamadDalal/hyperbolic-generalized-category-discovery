@@ -493,7 +493,7 @@ def test_kmeans(model, test_loader,
     all_feats = np.concatenate(all_feats)
     if args.hyperbolic:
         #TODO: Investigate why K++ is failing to assign more than one center (Points too close to one another maybe?)
-        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=model[1].get_curvature(), init="random")
+        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=model[1].get_curvature(), init="k-means++")
         kmeans.fit(all_feats)
         preds = kmeans.labels_.numpy()
     else:

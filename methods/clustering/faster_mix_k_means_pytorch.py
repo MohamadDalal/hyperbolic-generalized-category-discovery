@@ -7,6 +7,7 @@ from sklearn.utils import check_random_state
 import project_utils.lorentz as L
 import project_utils.poincare as P
 import torch
+import torch.nn.functional as F
 
 def pairwise_distance(data1, data2, batch_size=None):
     r'''
@@ -104,9 +105,9 @@ class K_Means:
             if self.hyperbolic:
                 # TODO: Consider adding batching to Lorentz and Poincare pairwise distance if needed
                 if self.poincare:
-                    dist = P.pairwise_dist(X, C, curv = -self.curv)
+                    dist = P.pairwise_dist(X, C, curv = -self.curv, eps=1e-6)**2
                 else:
-                    dist = L.pairwise_dist(X, C, curv = self.curv)
+                    dist = L.pairwise_dist(X, C, curv = self.curv, eps=1e-6)**2
             else:
                 dist = pairwise_distance(X, C, self.pairwise_batch_size)
             dist = dist.view(-1, C.shape[0])
@@ -153,9 +154,9 @@ class K_Means:
             centers_old = centers.clone()
             if self.hyperbolic:
                 if self.poincare:
-                    dist = P.pairwise_dist(X, centers, curv = -self.curv)
+                    dist = P.pairwise_dist(X, centers, curv = -self.curv, eps=1e-6)
                 else:
-                    dist = L.pairwise_dist(X, centers, curv = self.curv)
+                    dist = L.pairwise_dist(X, centers, curv = self.curv, eps=1e-6)
             else:
                 dist = pairwise_distance(X, centers, self.pairwise_batch_size)
             mindist, labels = torch.min(dist, dim=1)
@@ -180,9 +181,9 @@ class K_Means:
 
             if self.hyperbolic:
                 if self.poincare:
-                    center_shift = torch.sum(P.elementwise_dist(centers, centers_old, curv = -self.curv))
+                    center_shift = torch.sum(P.elementwise_dist(centers, centers_old, curv = -self.curv, eps=1e-6))
                 else:
-                    center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv))
+                    center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv, eps=1e-6))
             else:
                 center_shift = torch.sum(torch.sqrt(torch.sum((centers - centers_old) ** 2, dim=1)))
             if center_shift ** 2 < self.tolerance:
@@ -224,7 +225,18 @@ class K_Means:
             labels[i] = cid2ncid[l_targets[i]]
 
         #initialize the centers, the first 'k' elements in the dataset will be our initial centers
-        centers = self.kpp(u_feats, l_centers, k=self.k, random_state=random_state)
+        if self.init == 'k-means++':
+            centers = self.kpp(u_feats, l_centers, k=self.k, random_state=random_state)
+        elif self.init == 'random':
+
+            random_state = check_random_state(self.random_state)
+            idx = random_state.choice(len(u_feats), self.k, replace=False)
+            for i in range(self.k):
+                centers[len(l_classes):i] = u_feats[idx[i]]
+
+        else:
+            for i in range(self.k):
+                centers[len(l_classes):i] = u_feats[i]
 
         # Begin iterations
         best_labels, best_inertia, best_centers = None, None, None
@@ -233,9 +245,9 @@ class K_Means:
 
             if self.hyperbolic:
                 if self.poincare:
-                    dist = P.pairwise_dist(cat_feats, centers, curv = -self.curv)
+                    dist = P.pairwise_dist(u_feats, centers, curv = -self.curv, eps=1e-6)
                 else:
-                    dist = L.pairwise_dist(u_feats, centers, curv = self.curv)
+                    dist = L.pairwise_dist(u_feats, centers, curv = self.curv, eps=1e-6)
             else:
                 dist = pairwise_distance(u_feats, centers, self.pairwise_batch_size)
             u_mindist, u_labels = torch.min(dist, dim=1)
@@ -243,13 +255,13 @@ class K_Means:
             if self.hyperbolic:
                 # DONE: Optimize by not having to take pairwise distance
                 if self.poincare:
-                    l_mindist = L.elementwise_dist(l_feats, centers[labels[:l_num]], curv = -self.curv)
+                    l_mindist = P.elementwise_dist(l_feats, centers[labels[:l_num]], curv = -self.curv, eps=1e-6)
                 else:
                     #l_dist = L.pairwise_dist(l_feats, centers, curv = self.curv)
                     # Get the distance to the corresponding label's center
                     #l_mindist = l_dist[torch.arange(l_num), labels[:l_num]]
                     #l_mindist, _ = torch.min(l_dist, dim=1)
-                    l_mindist = L.elementwise_dist(l_feats, centers[labels[:l_num]], curv = self.curv)
+                    l_mindist = L.elementwise_dist(l_feats, centers[labels[:l_num]], curv = self.curv, eps=1e-6)
             else:
                 # Done: Investigate how the hell this works. l_feats and centers are not the same shape afaik
                 # Might have to do with the assignment inside centers. Just looked, it does
@@ -279,9 +291,9 @@ class K_Means:
             # DONE: Add hyperbolic distance
             if self.hyperbolic:
                 if self.poincare:
-                    center_shift = torch.sum(P.elementwise_dist(centers, centers_old, curv = -self.curv))
+                    center_shift = torch.sum(P.elementwise_dist(centers, centers_old, curv = -self.curv, eps=1e-6))
                 else:
-                    center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv))
+                    center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv, eps=1e-6))
             else:
                 center_shift = torch.sum(torch.sqrt(torch.sum((centers - centers_old) ** 2, dim=1)))
 
@@ -373,6 +385,16 @@ def main():
                       center_box=(-10.0, 10.0),
                       shuffle=True,
                       random_state=1)  # For reproducibility
+    print(torch.from_numpy(X).norm(dim=-1).max())
+    X = torch.from_numpy(X)
+    #X = torch.where(X.norm(dim=-1, keepdim=True) < 2, X, 2*F.normalize(X, dim=-1))
+    X = L.exp_map0(X, curv=torch.tensor(2.0))
+    #X = P.expmap0(X, k=torch.tensor(-2.0), project=False)
+    #X = P.project(X, k=torch.tensor(-2.0), eps=1-1e-3)
+    if X.isnan().any():
+        print("X has NaN values")
+        exit()
+    X = np.array(X)
 
     cuda = torch.cuda.is_available()
     device = torch.device("cuda" if cuda else "cpu")
@@ -392,6 +414,7 @@ def main():
 
     #km = K_Means(k=4, init='k-means++', random_state=1, n_jobs=None, pairwise_batch_size=10)
     km = K_Means(k=4, init='k-means++', random_state=1, n_jobs=None, pairwise_batch_size=10, hyperbolic=True, curv=2.0)
+    #km = K_Means(k=4, init='k-means++', random_state=1, n_jobs=None, pairwise_batch_size=10, hyperbolic=True, poincare=True, curv=2.0)
 
     #  km.fit(X)
 
@@ -399,6 +422,7 @@ def main():
     #  X = X.cpu()
     X = cat_feats.cpu()
     centers = km.cluster_centers_.cpu()
+    print(centers)
     pred = km.labels_.cpu()
     print('nmi', nmi_score(pred, y))
 
@@ -415,6 +439,7 @@ def main():
     plt.title(f"nmi={nmi_score(pred, y)}")
     #plt.savefig('kmeans.png', dpi=300)
     plt.savefig('hyperbolic_kmeans.png', dpi=300)
+    #plt.savefig('poincare_kmeans.png', dpi=300)
     plt.show()
 
 if __name__ == "__main__":
