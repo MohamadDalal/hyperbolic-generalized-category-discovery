@@ -369,3 +369,25 @@ $$\gamma_i = \frac{1}{\sqrt{1-c||x_{K,i}||^2}}=\left(\sqrt{1-c\left||\frac{2x_{P
 $$\gamma_i = \left(\sqrt{1-\frac{4c}{(1+c||x_{P,i}||^2)^2}||x_{P,i}||^2}\right)^{-1}$$
 
 To be honest. I think the best way to go about this is to convert all to Klein, find the midpoint and convert back. There is not much simplification here.
+
+## Understanding the Lorentz Centroid
+I have two sources for the Lorentz Centroid. The first is the paper Lorentzian distance learning for hyperbolic representations, and the second is the following math exchange answer https://math.stackexchange.com/a/2173370. The Lorentz centroid is supposidely the point that minimizes the squared Lorentz distance to a batch of points, and is found using:
+
+$$\mu = \sqrt{\Beta}\frac{\sum_{i=1}^{B}{v_ix_{L,i}}}{|||\sum_{i=1}^{B}{v_ix_{L,i}}||_{\mathcal{L}}|}$$
+
+Where $x_{L,i}$ are point in the hyperboloid ($x_{space} | x_{time}$), $v_i$ are weights and $\Beta = 1/c$. The operation $|||a||_{\mathcal{L}}|$ is the modulus of the Lorentz norm, but the Lorentz norm of a vector is:
+$$||a||_{\mathcal{L}}=\sqrt{<a,a>_{\mathcal{L}}}=\sqrt{-1/c}$$
+
+Nvm that is not correct because the vector $a$ doesn't have to be on the hyperboloid, it just has to be time-like (Within light cone and has negative Lorentz inner product). So the formula seems to be alright, but can we simplifiy it? My initial thought is that we cannot really because we need to find $x_{time}$ for $\sum_{i=1}^{B}{v_ix_{L,i}}$ to get it's modulus norm. But how do we get that modulus norm? It involves squaring a negative number. What kind of imaginary number do we get from squaring a negative number? Well I think it is kinda simple here is what I think it is:
+
+$$\sqrt{-x}=\sqrt{i^2x}=i\sqrt{x}$$
+
+But how do we get the modulus of this value? It has no real component? Well seems I am remembering wrong. The modulus of an imaginary number is:
+
+$$|x+iy|=\sqrt{x^2+y^2}$$
+
+So I just get $\sqrt{\sqrt{x}^2}=\sqrt{x}$ as my final answer. I can simplify my calculations to this:
+
+$$\mu_{space}=\frac{1}{\sqrt{c}}\frac{\sum_{i=1}^{B}{v_ix_{space,i}}}{\sqrt{|||\sum_{i=1}^{B}{v_ix_{space,i}}||^2-(\sum_{i=1}^{B}{v_ix_{time,i}})^2|}}$$
+
+But that doesn't really matter since I gotta find the full vector anyways. I will also use a weight $v_i=1/B$ to introduce numerical stability to it. I should demonstrate the difference between all the centroids in my project. Just make a circle in Lorentz space and show the computed centroids

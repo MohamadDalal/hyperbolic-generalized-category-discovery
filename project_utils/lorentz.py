@@ -273,6 +273,26 @@ def einstein_midpoint(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
 #    centroid = sum_space / (-elementwise_inner(sum_space, sum_space, curv))**0.5
 #    return centroid
 
+def lorentz_centroid(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
+    """
+    Compute the Lorentz centroid of multiple points on the hyperboloid.
+    The Lorentz centroid is the point that minimizes the squared Lorentz distance on the hyperboloid
+
+    Args:
+        x: Tensor of shape `(B, D)` giving a batch of space components of
+            vectors on the hyperboloid.
+        curv: Positive scalar denoting negative hyperboloid curvature.
+
+    Returns:
+        Tensor of shape `(1, D)` giving the Einstein midpoint of input vectors.
+    """
+    #B, D = x.shape
+    x_time = torch.sqrt(1 / curv + torch.sum(x**2, dim=-1, keepdim=False))
+    mu_TL_space = torch.mean(x, dim=0)
+    mu_TL_time = torch.mean(x_time, dim=0)
+    denom = torch.sqrt(curv*torch.abs(mu_TL_space.pow(2).sum(dim=-1) - mu_TL_time**2))
+    return mu_TL_space / denom
+
 def half_aperture(
     x: Tensor, curv: float | Tensor = 1.0, min_radius: float = 0.1, eps: float = 1e-8
 ) -> Tensor:
