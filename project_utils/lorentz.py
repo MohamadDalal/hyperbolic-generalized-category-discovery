@@ -59,7 +59,7 @@ def pairwise_dist(
 
     Args:
         x: Tensor of shape `(B1, D)` giving a space components of a batch
-            of point on the hyperboloid.
+            of points on the hyperboloid.
         y: Tensor of shape `(B2, D)` giving a space components of another
             batch of points on the hyperboloid.
         curv: Positive scalar denoting negative hyperboloid curvature.
@@ -103,15 +103,14 @@ def elementwise_dist(
     the hyperboloid.
 
     Args:
-        x: Tensor of shape `(B1, D)` giving a space components of a batch
-            of point on the hyperboloid.
-        y: Tensor of shape `(B2, D)` giving a space components of another
-            batch of points on the hyperboloid.
+        x: Tensor of shape `(B, D)` giving a space components of a batch
+            of points on the hyperboloid.
+        y: Tensor of same shape as `x` giving another batch of points.
         curv: Positive scalar denoting negative hyperboloid curvature.
         eps: Small float number to avoid numerical instability.
 
     Returns:
-        Tensor of shape `(B1, B2)` giving pairwise distance along the geodesics
+        Tensor of shape `(B, )` giving elemntwise distance along the geodesics
         connecting the input points.
     """
     
@@ -180,7 +179,7 @@ def log_map0(x: Tensor, curv: float | Tensor = 1.0, eps: float = 1e-8) -> Tensor
 
 # TODO: Consider seperating into batches to avoid overflow in einstein midpoint
 
-def einstein_midpoint(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
+def old_einstein_midpoint(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
     """
     Compute the Einstein midpoint of multiple points on the hyperboloid. The Einstein
     midpoint is the point centroid of points in the Klein model.
@@ -196,6 +195,30 @@ def einstein_midpoint(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
     """
     x_time = torch.sqrt(1 / curv + torch.sum(x**2, dim=-1))
     midpoint = torch.sum(x, dim=0) / (curv**0.5 * torch.sum(x_time))
+    return midpoint
+
+# TODO: Consider seperating into batches to avoid overflow in einstein midpoint
+
+def einstein_midpoint(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
+    """
+    Compute the Einstein midpoint of multiple points on the hyperboloid. The Einstein
+    midpoint is the point centroid of points in the Klein model.
+    This is the transformed version for the Lorentz model.
+
+    Args:
+        x: Tensor of shape `(B, D)` giving a batch of space components of
+            vectors on the hyperboloid.
+        curv: Positive scalar denoting negative hyperboloid curvature.
+
+    Returns:
+        Tensor of shape `(1, D)` giving the Einstein midpoint of input vectors.
+    """
+    # Find the midpoints in the Klein disc
+    x_time = torch.sqrt(1 / curv + torch.sum(x**2, dim=-1))
+    midpoint_klein = torch.sum(x, dim=0) / (curv**0.5 * torch.sum(x_time))
+    # Transform back to Lorentz
+    midpoint_time = torch.sqrt(1 / (curv - curv**2*torch.sum(midpoint_klein**2, dim=-1)))
+    midpoint = torch.sqrt(curv) * midpoint_time * midpoint_klein
     return midpoint
 
 # This centroid is numerically unstable due to transforming to Klein and back
