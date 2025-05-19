@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 from sklearn.cluster import KMeans
 import torch
-from torch.optim import SGD, lr_scheduler
+from torch.optim import AdamW, SGD, lr_scheduler
 from project_utils.cluster_utils import mixed_eval, AverageMeter
 from models import vision_transformer as vits
 
@@ -46,7 +46,7 @@ class SupConLoss(torch.nn.Module):
         self.hyperbolic = hyperbolic
         self.poincare = poincare
 
-    def forward(self, features, labels=None, mask=None, curv=1.0):
+    def forward(self, features, labels=None, mask=None, curv=1.0, use_angles=False):
         """Compute loss for model. If both `labels` and `mask` are None,
         it degenerates to SimCLR unsupervised loss:
         https://arxiv.org/pdf/2002.05709.pdf
@@ -94,29 +94,56 @@ class SupConLoss(torch.nn.Module):
         else:
             raise ValueError('Unknown mode: {}'.format(self.contrast_mode))
 
-        # compute logits. DONE: Make sure that the direction of the values is correct after stabilizing
-        if self.hyperbolic:
-            # Result of this: Highest distance will be lowest value. Lowest distance will be 0
-            if self.poincare:
-                minus_distance = - P.pairwise_dist(anchor_feature, contrast_feature, curv=-curv, eps=1e-6) / self.temperature
+        if use_angles:
+            if self.hyperbolic:
+                # Result of this: Highest distance will be lowest value. Lowest distance will be 0
+                if self.poincare:
+                    anchor_dot_contrast = torch.div(
+                    torch.matmul(F.normalize(anchor_feature, dim=-1),
+                                 F.normalize(contrast_feature, dim=-1).T),
+                    self.temperature)
+                    # for numerical stability, as soft max is translation invariant
+                    logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
+                    logits = anchor_dot_contrast - logits_max.detach()
+                else:
+                    # Unlike dot product. We want to minimize this, not maximize it
+                    M = - L.pairwise_oxy_angle(anchor_feature, contrast_feature, curv=curv, eps=1e-6) / self.temperature
+                    # for numerical stability, as soft max is translation invariant
+                    logits_max, _ = torch.max(M[~torch.eye(*M.shape,dtype = torch.bool)].view(M.shape[0], M.shape[1]-1), dim=1, keepdim=True)
+                    logits = M - logits_max.detach()
             else:
-                minus_distance = - L.pairwise_dist(anchor_feature, contrast_feature, curv=curv, eps=1e-6) / self.temperature
-            M = minus_distance
+                # Result of this: Lowest similarity will be lowest value. Highest similarity will be 0
+                anchor_dot_contrast = torch.div(
+                    torch.matmul(anchor_feature, contrast_feature.T),
+                    self.temperature)
 
-            # for numerical stability, as soft max is translation invariant
-            logits_max, _ = torch.max(M[~torch.eye(*M.shape,dtype = torch.bool)].view(M.shape[0], M.shape[1]-1), dim=1, keepdim=True)
-            logits = minus_distance - logits_max.detach()
-            #logits = minus_distance
-
+                # for numerical stability, as soft max is translation invariant
+                logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
+                logits = anchor_dot_contrast - logits_max.detach()
         else:
-            # Result of this: Lowest similarity will be lowest value. Highest similarity will be 0
-            anchor_dot_contrast = torch.div(
-                torch.matmul(anchor_feature, contrast_feature.T),
-                self.temperature)
+            # compute logits. DONE: Make sure that the direction of the values is correct after stabilizing
+            if self.hyperbolic:
+                # Result of this: Highest distance will be lowest value. Lowest distance will be 0
+                if self.poincare:
+                    minus_distance = - P.pairwise_dist(anchor_feature, contrast_feature, curv=-curv, eps=1e-6) / self.temperature
+                else:
+                    minus_distance = - L.pairwise_dist(anchor_feature, contrast_feature, curv=curv, eps=1e-6) / self.temperature
+                M = minus_distance
 
-            # for numerical stability, as soft max is translation invariant
-            logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
-            logits = anchor_dot_contrast - logits_max.detach()
+                # for numerical stability, as soft max is translation invariant
+                logits_max, _ = torch.max(M[~torch.eye(*M.shape,dtype = torch.bool)].view(M.shape[0], M.shape[1]-1), dim=1, keepdim=True)
+                logits = minus_distance - logits_max.detach()
+                #logits = minus_distance
+
+            else:
+                # Result of this: Lowest similarity will be lowest value. Highest similarity will be 0
+                anchor_dot_contrast = torch.div(
+                    torch.matmul(anchor_feature, contrast_feature.T),
+                    self.temperature)
+
+                # for numerical stability, as soft max is translation invariant
+                logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
+                logits = anchor_dot_contrast - logits_max.detach()
 
         # tile mask
         mask = mask.repeat(anchor_count, contrast_count)
@@ -178,7 +205,7 @@ class ContrastiveLearningViewGenerator(object):
         return [self.base_transform(x) for i in range(self.n_views)]
 
 # TODO: Check why this does not use temperature, while supervised loss uses temperature
-def info_nce_logits(features, args, curv=1.0):
+def info_nce_logits(features, args, curv=1.0, use_angles=False):
 
     b_ = 0.5 * int(features.size(0))
 
@@ -188,9 +215,16 @@ def info_nce_logits(features, args, curv=1.0):
 
     if args.hyperbolic:
         if args.poincare:
-            similarity_matrix = - P.pairwise_dist(features, features, curv=-curv, eps=1e-6)
+            if use_angles:
+                features = F.normalize(features, dim=1)
+                similarity_matrix = torch.matmul(features, features.T)
+            else:
+                similarity_matrix = - P.pairwise_dist(features, features, curv=-curv, eps=1e-6)
         else:
-            similarity_matrix = - L.pairwise_dist(features, features, curv=curv, eps=1e-6)
+            if use_angles:
+                similarity_matrix = - L.pairwise_oxy_angle(features, features, curv=curv, eps=1e-6)
+            else:
+                similarity_matrix = - L.pairwise_dist(features, features, curv=curv, eps=1e-6)
         if True in similarity_matrix.isnan():
             #print(similarity_matrix)
             print("Hyperbolic distance is NaN")
@@ -249,10 +283,23 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
         sup_con_loss_record = AverageMeter()
         train_acc_record = AverageMeter()
 
+        if args.angle_loss:
+            dist_con_loss_record = AverageMeter()
+            angle_con_loss_record = AverageMeter()
+            dist_sup_con_loss_record = AverageMeter()
+            angle_sup_con_loss_record = AverageMeter()
+
         if epoch >= args.epochs_warmup and freeze_curv_for_warmup:
             model[1].train_curvature(True)
             freeze_curv_for_warmup = False
             print("Unfreezing curvature at epoch {}".format(epoch))
+        
+        if args.angle_loss:
+            if args.decay_angle_loss_weight:
+                # Decay angle loss weight
+                angle_loss_weight = args.max_angle_loss_weight*(1 - (epoch / args.epochs))
+            else:
+                angle_loss_weight = args.max_angle_loss_weight
 
         model.train()
 
@@ -271,7 +318,7 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
                 features, output_log_stats = model(images)
 
                 # L2-normalize features if not using hyperbolic space
-                features = features if args.hyperbolic else torch.nn.functional.normalize(features, dim=-1)
+                features = features if args.hyperbolic else F.normalize(features, dim=-1)
 
                 # Choose which instances to run the contrastive loss on
                 if args.contrast_unlabel_only:
@@ -297,6 +344,18 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
                 # TODO: Do we need to use a hyperbolic cross entropy loss? I forgot to consider that.
                 contrastive_loss = torch.nn.CrossEntropyLoss()(contrastive_logits, contrastive_labels)
 
+                if args.angle_loss:
+                    dist_con_loss_record.update(contrastive_loss.item(), class_labels.size(0))
+                    step_log_dict["step/train/dist_contrastive_loss"] = contrastive_loss.item()
+                    if args.hyperbolic:
+                        angle_logits, angle_labels = info_nce_logits(features=con_feats, args=args, curv=model[1].get_curvature(), use_angles=True)
+                    else:
+                        angle_logits, angle_labels = info_nce_logits(features=con_feats, args=args, use_angles=True)
+                    angle_loss = torch.nn.CrossEntropyLoss()(angle_logits, angle_labels)
+                    angle_con_loss_record.update(angle_loss.item(), class_labels.size(0))
+                    step_log_dict["step/train/angle_contrastive_loss"] = contrastive_loss.item()
+                    contrastive_loss = (1 - angle_loss_weight) * contrastive_loss + angle_loss_weight * angle_loss
+
                 # Supervised contrastive loss
                 f1, f2 = [f[mask_lab] for f in features.chunk(2)]
                 sup_con_feats = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
@@ -306,6 +365,17 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
                     sup_con_loss, SCL_log_stats = sup_con_crit(sup_con_feats, labels=sup_con_labels, curv=model[1].get_curvature())
                 else:
                     sup_con_loss, SCL_log_stats = sup_con_crit(sup_con_feats, labels=sup_con_labels)
+
+                if args.angle_loss:
+                    dist_sup_con_loss_record.update(sup_con_loss.item(), class_labels.size(0))
+                    step_log_dict["step/train/dist_sup_con_loss"] = sup_con_loss.item()
+                    if args.hyperbolic:
+                        angle_sup_con_loss, angle_SCL_log_stats = sup_con_crit(sup_con_feats, labels=sup_con_labels, curv=model[1].get_curvature(), use_angles=True) 
+                    else:
+                        angle_sup_con_loss, angle_SCL_log_stats = sup_con_crit(sup_con_feats, labels=sup_con_labels, use_angles=True) 
+                    angle_sup_con_loss_record.update(angle_sup_con_loss.item(), class_labels.size(0))
+                    step_log_dict["step/train/angle_sup_con_loss"] = angle_sup_con_loss.item()
+                    sup_con_loss = (1 - angle_loss_weight) * sup_con_loss + angle_loss_weight * angle_sup_con_loss
 
                 # Total loss
                 loss = (1 - args.sup_con_weight) * contrastive_loss + args.sup_con_weight * sup_con_loss
@@ -352,6 +422,27 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
                 step_log_dict["debug/step/train/SCL_log_prob_masked_stddiv"] = SCL_log_stats[4][1]
                 step_log_dict["debug/step/train/SCL_log_prob_masked_max"] = SCL_log_stats[4][2]
                 step_log_dict["debug/step/train/SCL_log_prob_masked_min"] = SCL_log_stats[4][3]
+                if args.angle_loss:
+                    step_log_dict["debug/step/train/Angle/SCL_logits_mean"] = angle_SCL_log_stats[0][0]
+                    step_log_dict["debug/step/train/Angle/SCL_logits_stddiv"] = angle_SCL_log_stats[0][1]
+                    step_log_dict["debug/step/train/Angle/SCL_logits_max"] = angle_SCL_log_stats[0][2]
+                    step_log_dict["debug/step/train/Angle/SCL_logits_min"] = angle_SCL_log_stats[0][3]
+                    step_log_dict["debug/step/train/Angle/SCL_exp_logits_mean"] = angle_SCL_log_stats[1][0]
+                    step_log_dict["debug/step/train/Angle/SCL_exp_logits_stddiv"] = angle_SCL_log_stats[1][1]
+                    step_log_dict["debug/step/train/Angle/SCL_exp_logits_max"] = angle_SCL_log_stats[1][2]
+                    step_log_dict["debug/step/train/Angle/SCL_exp_logits_min"] = angle_SCL_log_stats[1][3]
+                    step_log_dict["debug/step/train/Angle/SCL_exp_logits_masked_mean"] = angle_SCL_log_stats[2][0]
+                    step_log_dict["debug/step/train/Angle/SCL_exp_logits_masked_stddiv"] = angle_SCL_log_stats[2][1]
+                    step_log_dict["debug/step/train/Angle/SCL_exp_logits_masked_max"] = angle_SCL_log_stats[2][2]
+                    step_log_dict["debug/step/train/Angle/SCL_exp_logits_masked_min"] = angle_SCL_log_stats[2][3]
+                    step_log_dict["debug/step/train/Angle/SCL_log_prob_mean"] = angle_SCL_log_stats[3][0]
+                    step_log_dict["debug/step/train/Angle/SCL_log_prob_stddiv"] = angle_SCL_log_stats[3][1]
+                    step_log_dict["debug/step/train/Angle/SCL_log_prob_max"] = angle_SCL_log_stats[3][2]
+                    step_log_dict["debug/step/train/Angle/SCL_log_prob_min"] = angle_SCL_log_stats[3][3]
+                    step_log_dict["debug/step/train/Angle/SCL_log_prob_masked_mean"] = angle_SCL_log_stats[4][0]
+                    step_log_dict["debug/step/train/Angle/SCL_log_prob_masked_stddiv"] = angle_SCL_log_stats[4][1]
+                    step_log_dict["debug/step/train/Angle/SCL_log_prob_masked_max"] = angle_SCL_log_stats[4][2]
+                    step_log_dict["debug/step/train/Angle/SCL_log_prob_masked_min"] = angle_SCL_log_stats[4][3]
                 if args.hyperbolic:
                     if args.euclidean_clipping is not None:
                         step_log_dict["step/train/cliped_embed_mean"] = output_log_stats[2][0]
@@ -370,7 +461,14 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
                     step_log_dict["step/train/hyp_embed_min"] = output_log_stats[1][3]
                 optimizer.zero_grad()
                 loss.backward()
-                # Add gradient clipping or normalization here
+                # Add gradient clipping or normalization and logging here
+                if args.hyperbolic:
+                    if not args.freeze_curvature.lower() == "full":
+                        model[1].curv.grad = min(1, args.curvature/model[1].curv.grad.norm().item())*model[1].curv.grad
+                        step_log_dict["step/train/grad_curvature"] = model[1].curv.grad
+                    if not args.freeze_proj_alpha.lower() == "full":
+                        model[1].proj_alpha.grad = min(1, args.proj_alpha/model[1].proj_alpha.grad.norm().item())*model[1].proj_alpha.grad
+                        step_log_dict["step/train/grad_proj_alpha"] = model[1].proj_alpha.grad
                 optimizer.step()
                 wandb.log(step_log_dict)
 
@@ -380,6 +478,11 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
         epoch_log_dict = {"epoch": epoch+1, "epoch/train/loss": loss_record.avg, "epoch/train/acc": train_acc_record.avg,
                           "epoch/train/contrstive_loss": con_loss_record.avg, "epoch/train/sup_con_loss": sup_con_loss_record.avg,
                           "epoch/train/mean_learning_rate": get_mean_lr(optimizer), "epoch/train/learning_rate": scheduler.get_last_lr()[0]}
+        if args.angle_loss:
+            epoch_log_dict["epoch/train/dist_con_loss"] = dist_con_loss_record.avg
+            epoch_log_dict["epoch/train/angle_con_loss"] = angle_con_loss_record.avg
+            epoch_log_dict["epoch/train/dist_sup_con_loss"] = dist_sup_con_loss_record.avg
+            epoch_log_dict["epoch/train/angle_sup_con_loss"] = angle_sup_con_loss_record.avg
         if args.hyperbolic:
             print(f"Current curvature: {model[1].get_curvature()}")
             print(f"Current projection weight: {model[1].get_proj_alpha()}")
@@ -479,7 +582,7 @@ def test_kmeans(model, test_loader,
         # Pass features through base model and then additional learnable transform (linear layer)
         feats, _ = model(images)
 
-        feats = torch.nn.functional.normalize(feats, dim=-1)
+        feats = F.normalize(feats, dim=-1)
 
         all_feats.append(feats.cpu().detach().numpy())
         targets = np.append(targets, label.cpu().numpy())
@@ -493,7 +596,8 @@ def test_kmeans(model, test_loader,
     all_feats = np.concatenate(all_feats)
     if args.hyperbolic:
         #TODO: Investigate why K++ is failing to assign more than one center (Points too close to one another maybe?)
-        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=model[1].get_curvature(), init="k-means++")
+        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=model[1].get_curvature(),
+                               init="k-means++", poincare=args.poincare)
         kmeans.fit(all_feats)
         preds = kmeans.labels_.numpy()
     else:
@@ -547,7 +651,7 @@ if __name__ == "__main__":
     parser.add_argument('--wandb_mode', type=str, default="online")
     parser.add_argument('--epochs_warmup', default=2, type=int)
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
-    parser.add_argument('--poincare', action='store_true', default=False)
+    parser.add_argument('--poincare', type=str2bool, default=False)
     parser.add_argument('--kmeans', type=str2bool, default=False)
     parser.add_argument('--kmeans_frequency', type=int, default=20)
     parser.add_argument('--curvature', type=float, default=1.0)
@@ -556,6 +660,11 @@ if __name__ == "__main__":
     parser.add_argument('--proj_alpha', type=float, default=1.7035**-1)
     parser.add_argument('--freeze_proj_alpha', type=str, default="false")
     parser.add_argument('--checkpoint_path', type=str)
+    parser.add_argument('--angle_loss', type=str2bool, default=False)
+    parser.add_argument('--max_angle_loss_weight', type=float, default=0.5)
+    parser.add_argument('--decay_angle_loss_weight', type=str2bool, default=False)
+    parser.add_argument('--use_adam', type=str2bool, default=False)
+    parser.add_argument('--mlp_out_dim', type=int, default=768)
 
     # ----------------------
     # INIT
@@ -597,7 +706,7 @@ if __name__ == "__main__":
         args.feat_dim = 768
         args.num_mlp_layers = 3
         #args.mlp_out_dim = 65536
-        args.mlp_out_dim = 768
+        #args.mlp_out_dim = 768
 
         # ----------------------
         # HOW MUCH OF BASE MODEL TO FINETUNE
@@ -672,7 +781,10 @@ if __name__ == "__main__":
     # ----------------------
     # OPTIMIZER AND SCHEDULER
     # ----------------------
-    optimizer = SGD(vits.get_params_groups(model), lr=args.lr, momentum=args.momentum,
+    if args.use_adam:
+        optimizer = AdamW(vits.get_params_groups(model), lr=args.lr, weight_decay=args.weight_decay)
+    else:
+        optimizer = SGD(vits.get_params_groups(model), lr=args.lr, momentum=args.momentum,
                     weight_decay=args.weight_decay)
 
     scheduler = lr_scheduler.CosineAnnealingLR(

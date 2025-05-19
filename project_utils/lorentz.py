@@ -358,3 +358,39 @@ def oxy_angle(x: Tensor, y: Tensor, curv: float | Tensor = 1.0, eps: float = 1e-
     _angle = torch.acos(torch.clamp(acos_input, min=-1 + eps, max=1 - eps))
 
     return _angle
+
+def pairwise_oxy_angle(x: Tensor, y: Tensor, curv: float | Tensor = 1.0, eps: float = 1e-8):
+    """
+    Given two vectors `x` and `y` on the hyperboloid, compute the exterior
+    angle at `x` in the hyperbolic triangle `Oxy` where `O` is the origin
+    of the hyperboloid.
+
+    This expression is derived using the Hyperbolic law of cosines.
+
+    Args:
+        x: Tensor of shape `(B, D)` giving a batch of space components of
+            vectors on the hyperboloid.
+        y: Tensor of same shape as `x` giving another batch of vectors.
+        curv: Positive scalar denoting negative hyperboloid curvature.
+
+    Returns:
+        Tensor of shape `(B, )` giving the required angle. Values of this
+        tensor lie in `(0, pi)`.
+    """
+
+    # Calculate time components of inputs (multiplied with `sqrt(curv)`):
+    x_time = torch.sqrt(1 / curv + torch.sum(x**2, dim=-1, keepdim=True))
+    y_time = torch.sqrt(1 / curv + torch.sum(y**2, dim=-1, keepdim=True))
+
+    # Calculate lorentzian inner product multiplied with curvature. We do not use
+    # the `pairwise_inner` implementation to save some operations (since we only
+    # need the diagonal elements).
+    c_xyl = curv * pairwise_inner(x, y, curv)
+
+    # Make the numerator and denominator for input to arc-cosh, shape: (B, )
+    acos_numer = y_time.T + c_xyl * x_time
+    acos_denom = torch.sqrt(torch.clamp(c_xyl**2 - 1, min=eps))
+
+    acos_input = acos_numer / (torch.norm(x, dim=-1, keepdim=True) * acos_denom + eps)
+    _angle = torch.acos(torch.clamp(acos_input, min=-1 + eps, max=1 - eps))
+    return _angle
