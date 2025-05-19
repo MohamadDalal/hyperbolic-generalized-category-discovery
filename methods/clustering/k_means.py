@@ -66,7 +66,7 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
     if args.hyperbolic:
         kmeans = SemiSupKMeans(k=K, tolerance=1e-4, max_iterations=args.max_kmeans_iter, init='random',
                             n_init=args.k_means_init, random_state=None, n_jobs=None, pairwise_batch_size=None, mode=None,
-                            hyperbolic=True, curv=args.curvature)
+                            hyperbolic=True, curv=args.curvature, poincare=args.poincare)
     else:
         kmeans = SemiSupKMeans(k=K, tolerance=1e-4, max_iterations=args.max_kmeans_iter, init='k-means++',
                             n_init=args.k_means_init, random_state=None, n_jobs=None, pairwise_batch_size=1024, mode=None)
@@ -118,6 +118,7 @@ if __name__ == "__main__":
     parser.add_argument('--eval_funcs', nargs='+', help='Which eval functions to use', default=['v1', 'v2'])
     parser.add_argument('--use_ssb_splits', type=str2bool, default=True)
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
+    parser.add_argument('--poincare', type=str2bool, default=False)
 
     # ----------------------
     # INIT

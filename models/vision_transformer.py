@@ -325,6 +325,7 @@ class Hyperbolic_DINOHead(nn.Module):
         self.curv = nn.Parameter(
             torch.tensor(curv_init).log(), requires_grad=learn_curv
         )
+        self.learn_curv = learn_curv
         # When learning the curvature parameter, restrict it in this interval to
         # prevent training instability.
         self._curv_minmax = {
@@ -381,7 +382,7 @@ class Hyperbolic_DINOHead(nn.Module):
         # Once `exp(scale) = 1`, they can simply be removed during inference.
         self.proj_alpha.data = torch.clamp(self.proj_alpha.data, max=0.0, min=math.log(1e-1))
         # Clamp curvatue in case it becomes too high or too low
-        self.curv.data = torch.clamp(self.curv.data, **self._curv_minmax)
+        self.curv.data = torch.clamp(self.curv.data, **self._curv_minmax) if self.learn_curv else self.curv.data
         #x_norm = torch.sqrt(torch.sum(x**2, dim=1))
         x_norm = torch.norm(x, dim=1)
         #print(x.shape)

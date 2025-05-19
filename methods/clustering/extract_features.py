@@ -34,7 +34,10 @@ def extract_features_dino(model, loader, save_dir):
             images, labels, idxs = batch[:3]
             images = images.to(device)
 
-            features, _ = model(images)         # CLS_Token for ViT, Average pooled vector for R50
+            if args.remove_dyno_head:
+                features = model(images)
+            else:
+                features, _ = model(images)         # CLS_Token for ViT, Average pooled vector for R50
 
             # Save features
             for f, t, uq in zip(features, labels, idxs):
@@ -84,6 +87,10 @@ if __name__ == "__main__":
     parser.add_argument('--dataset', type=str, default='aircraft', help='options: cifar10, cifar100, scars')
     parser.add_argument('--exp_id', type=str, default="")
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
+    parser.add_argument('--poincare', type=str2bool, default=False)
+    parser.add_argument('--euclidean_clipping', type=float, default=None)
+    parser.add_argument('--remove_dyno_head', type=str2bool, default=False)
+    parser.add_argument('--mlp_out_dim', type=int, default=768)
 
     # ----------------------
     # INIT
@@ -115,7 +122,7 @@ if __name__ == "__main__":
         args.feat_dim = 768
         args.num_mlp_layers = 3
         #args.mlp_out_dim = 65536
-        args.mlp_out_dim = 768
+        #args.mlp_out_dim = 768
 
         _, val_transform = get_transform('imagenet', image_size=args.image_size, args=args)
     else:
@@ -129,7 +136,9 @@ if __name__ == "__main__":
     # ----------------------
     if args.hyperbolic:
         projection_head = vits.__dict__['Hyperbolic_DINOHead'](in_dim=args.feat_dim, out_dim=args.mlp_out_dim,
-                                                               nlayers=args.num_mlp_layers, learn_curv=False)
+                                                               nlayers=args.num_mlp_layers, learn_curv=False,
+                                                               poincare = args.poincare,
+                                                               euclidean_clip_value=args.euclidean_clipping)
     else:
         projection_head = vits.__dict__['DINOHead'](in_dim=args.feat_dim, out_dim=args.mlp_out_dim,
                                                     nlayers=args.num_mlp_layers)
@@ -155,10 +164,17 @@ if __name__ == "__main__":
             else:
                 args.save_dir += args.exp_id
             print(f'Using weights from {args.warmup_model_dir} ...')
-            state_dict = torch.load(args.warmup_model_dir)["model_state_dict"]
+            checkpoint = torch.load(args.warmup_model_dir)#["model_state_dict"]
+            if checkpoint.get('model_state_dict', None) is not None:
+                state_dict = checkpoint['model_state_dict']
+            else:
+                state_dict = checkpoint
 
         
         model.load_state_dict(state_dict)
+        if args.remove_dyno_head:
+            model = model[0]
+            args.hyperbolic = False
 
         print(f'Saving to {args.save_dir}')
 
