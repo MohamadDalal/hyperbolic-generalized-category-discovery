@@ -31,6 +31,6 @@ nvidia-smi
 
 #export CUDA_VISIBLE_DEVICES=0
 
-srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset cub --use_best_model 'True' \
- --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/CUB-Hyperbolic-Train/checkpoints/model.pt' \
+srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset cub --use_best_model 'False' \
+ --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/CUB-Hyperbolic-Train/checkpoints/model_best_loss.pt' \
  --exp_id '_Hyperbolic' --hyperbolic 'True'

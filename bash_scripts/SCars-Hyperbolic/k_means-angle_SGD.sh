@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-KMeans-SCars-Hyperbolic.log"
-#SBATCH --job-name="GCD-KMeans-SCars-Hyperbolic"
+#SBATCH --output="logs/GCD-KMeans-SCars-Hyperbolic-Angle-SGD.log"
+#SBATCH --job-name="GCD-KMeans-SCars-Hyperbolic-Angle-SGD"
 #SBATCH --time=12:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
@@ -16,7 +16,7 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-KMeans-SCars-Hyperbolic.out"
+outfile="logs/GCD-KMeans-SCars-Hyperbolic-Angle-SGD.out"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -39,5 +39,5 @@ nvidia-smi
 #echo $EXP_NUM
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.k_means --dataset 'scars' --semi_sup 'True' --use_ssb_splits 'True' \
- --use_best_model 'False' --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id 'Hyperbolic' --hyperbolic 'True' #--K 98
+ --use_best_model 'False' --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id 'Hyperbolic-Angle-SGD_Euclidean' --hyperbolic 'False' --poincare 'False' #--K 98
  #> ${SAVE_DIR}logfile_${EXP_NUM}.out

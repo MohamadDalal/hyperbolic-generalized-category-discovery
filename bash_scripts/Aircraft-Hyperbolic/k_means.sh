@@ -39,5 +39,5 @@ nvidia-smi
 #echo $EXP_NUM
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.k_means --dataset 'aircraft' --semi_sup 'True' --use_ssb_splits 'True' \
- --use_best_model 'True' --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id 'Hyperbolic' --hyperbolic 'True' #--K 50
+ --use_best_model 'False' --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id 'Hyperbolic' --hyperbolic 'True' #--K 50
  #> ${SAVE_DIR}logfile_${EXP_NUM}.out

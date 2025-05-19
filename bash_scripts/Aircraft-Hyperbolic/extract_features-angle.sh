@@ -1,8 +1,8 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-Extract-Aircraft-Hyperbolic.log"
-#SBATCH --job-name="GCD-Extract-Aircraft-Hyperbolic"
-#SBATCH --time=12:00:00
+#SBATCH --output="logs/GCD-Extract-Aircraft-Hyperbolic-Angle.log"
+#SBATCH --job-name="GCD-Extract-Aircraft-Hyperbolic-Angle"
+#SBATCH --time=2:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-gpu=8
@@ -16,7 +16,7 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-Extract-Aircraft-Hyperbolic.out"
+outfile="logs/GCD-Extract-Aircraft-Hyperbolic-Angle.out"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -32,5 +32,5 @@ nvidia-smi
 #export CUDA_VISIBLE_DEVICES=0
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset aircraft --use_best_model 'False' \
- --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/Aircraft-Hyperbolic-Train/checkpoints/model_best_loss.pt' \
- --exp_id '_Hyperbolic' --hyperbolic 'True'
+ --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/Aircraft-Hyperbolic-Angle-Train/checkpoints/model_best_loss.pt' \
+ --exp_id '_Hyperbolic-Angle_Euclidean' --hyperbolic 'True' --poincare 'False' --euclidean_clipping 2.3 --remove_dyno_head 'True' --mlp_out_dim 256
