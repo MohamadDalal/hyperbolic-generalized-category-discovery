@@ -91,6 +91,7 @@ if __name__ == "__main__":
     parser.add_argument('--euclidean_clipping', type=float, default=None)
     parser.add_argument('--remove_dyno_head', type=str2bool, default=False)
     parser.add_argument('--mlp_out_dim', type=int, default=768)
+    parser.add_argument('--use_dinov2', type=str2bool, default=False)
 
     # ----------------------
     # INIT
@@ -112,7 +113,7 @@ if __name__ == "__main__":
         args.crop_pct = 0.875
         #pretrain_path = dino_pretrain_path
 
-        model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')#, pretrained=False)
+        model = torch.hub.load('facebookresearch/dinov2:main', 'dinov2_vitb14') if args.use_dinov2 else torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
 
         #state_dict = torch.load(pretrain_path, map_location='cpu')
         #model.load_state_dict(state_dict)
