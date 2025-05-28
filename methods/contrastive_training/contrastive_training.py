@@ -462,6 +462,23 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
                 optimizer.zero_grad()
                 loss.backward()
                 # Add gradient clipping or normalization and logging here
+                grad_sum = 0
+                grad_max = 0
+                num_grad = 0
+                for p in model.parameters():
+                    if p.grad is not None:
+                        p.grad = min(1, args.max_grad_norm/p.grad.norm().item())*p.grad
+                        grad_sum += p.grad.norm().item()
+                        grad_max = max(grad_max, p.grad.norm().item())
+                        num_grad += 1
+                if (grad_sum/num_grad) > args.avg_grad_norm:
+                    norm_factor = args.avg_grad_norm*num_grad
+                    for p in model.parameters():
+                        if p.grad is not None:
+                            p.grad = p.grad/norm_factor
+                step_log_dict["step/train/grad_sum"] = grad_sum
+                step_log_dict["step/train/grad_max"] = grad_max
+                step_log_dict["step/train/grad_avg"] = grad_sum/num_grad
                 if args.hyperbolic:
                     if not args.freeze_curvature.lower() == "full":
                         model[1].curv.grad = min(1, args.curvature/model[1].curv.grad.norm().item())*model[1].curv.grad
@@ -665,6 +682,9 @@ if __name__ == "__main__":
     parser.add_argument('--decay_angle_loss_weight', type=str2bool, default=False)
     parser.add_argument('--use_adam', type=str2bool, default=False)
     parser.add_argument('--mlp_out_dim', type=int, default=768)
+    parser.add_argument('--use_dinov2', type=str2bool, default=False)
+    parser.add_argument('--max_grad_norm', type=float, default=1.0)
+    parser.add_argument('--avg_grad_norm', type=float, default=2.5)
 
     # ----------------------
     # INIT
@@ -692,7 +712,7 @@ if __name__ == "__main__":
         #pretrain_path = dino_pretrain_path
 
         #model = vits.__dict__['vit_base']()
-        model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
+        model = torch.hub.load('facebookresearch/dinov2:main', 'dinov2_vitb14') if args.use_dinov2 else torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
 
         #state_dict = torch.load(pretrain_path, map_location='cpu')
         #model.load_state_dict(state_dict)
