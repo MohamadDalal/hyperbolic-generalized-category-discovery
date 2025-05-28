@@ -54,6 +54,8 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --eval_funcs 'v2' \
             --exp_id 'SCars-Normal-Train' \
             --hyperbolic 'False' \
-            --kmeans 'True' \
-            --kmeans_frequency 20
+            --kmeans 'False' \
+            --kmeans_frequency 300 \
+            --max_grad_norm 100.0 \
+            --avg_grad_norm 100.0 \
 #> ${SAVE_DIR}logfile_${EXP_NUM}.out

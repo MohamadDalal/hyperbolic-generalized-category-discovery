@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-SCars-Hyperbolic-Angle-SGD.log"
-#SBATCH --job-name="GCD-SCars-Hyperbolic-Angle-SGD"
+#SBATCH --output="logs/GCD-SCars-Hyperbolic-Angle-SGD6.log"
+#SBATCH --job-name="GCD-SCars-Hyperbolic-Angle-SGD6"
 #SBATCH --time=12:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
@@ -16,7 +16,7 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-SCars-Hyperbolic-Angle-SGD.out"
+outfile="logs/GCD-SCars-Hyperbolic-Angle-SGD6.out"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -53,10 +53,10 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --transform 'imagenet' \
             --lr 0.1 \
             --eval_funcs 'v2' \
-            --exp_id 'SCars-Hyperbolic-Angle-SGD-Train' \
+            --exp_id 'SCars-Hyperbolic-Angle-SGD6-Train' \
             --hyperbolic 'True' \
             --kmeans 'True' \
-            --kmeans_frequency 20 \
+            --kmeans_frequency 100 \
             --curvature '0.1' \
             --proj_alpha 1.0 \
             --freeze_curvature 'False' \
@@ -64,7 +64,9 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --angle_loss 'True' \
             --max_angle_loss_weight 1.0 \
             --decay_angle_loss_weight 'True' \
+            --euclidean_clipping 10 \
+            --max_grad_norm 1.0 \
+            --avg_grad_norm 0.25 \
             #--use_adam 'True' \
-            #--euclidean_clipping 2.3 \
             #--mlp_out_dim 256 \
 #> ${SAVE_DIR}logfile_${EXP_NUM}.out

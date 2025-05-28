@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-Aircraft.log"
-#SBATCH --job-name="GCD-Aircraft"
+#SBATCH --output="logs/GCD-SCars-DINOv2.log"
+#SBATCH --job-name="GCD-SCars-DINOv2"
 #SBATCH --time=12:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
@@ -16,7 +16,7 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-Aircraft.out"
+outfile="logs/GCD-SCars-DINOv2.out"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -39,7 +39,7 @@ nvidia-smi
 #echo $EXP_NUM
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.contrastive_training.contrastive_training \
-            --dataset_name 'aircraft' \
+            --dataset_name 'scars' \
             --batch_size 128 \
             --grad_from_block 11 \
             --epochs 200 \
@@ -51,11 +51,12 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --contrast_unlabel_only 'False' \
             --transform 'imagenet' \
             --lr 0.1 \
-            --eval_funcs 'v1' 'v2' \
-            --exp_id 'Aircraft-Normal-Train' \
+            --eval_funcs 'v2' \
+            --exp_id 'SCars-DINOv2-Train' \
             --hyperbolic 'False' \
             --kmeans 'False' \
             --kmeans_frequency 300 \
             --max_grad_norm 100.0 \
             --avg_grad_norm 100.0 \
+            --use_dinov2 'True' \
 #> ${SAVE_DIR}logfile_${EXP_NUM}.out

@@ -31,6 +31,6 @@ nvidia-smi
 
 #export CUDA_VISIBLE_DEVICES=0
 
-srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset cifar10 --use_best_model 'True' \
- --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/Cifar10-Normal-Train/checkpoints/model.pt' \
- --exp_id '_Euclidean' --hyperbolic 'False'
+srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset cifar10 --use_best_model 'False' \
+ --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/Cifar10-Normal-Train/checkpoints/model_best_loss.pt' \
+ --exp_id '_Euclidean' --hyperbolic 'False' --remove_dyno_head 'False'
