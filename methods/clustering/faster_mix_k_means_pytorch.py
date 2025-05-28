@@ -87,18 +87,19 @@ class K_Means:
         return remaining_l_feats, remaining_l_targets, val_l_feats, val_l_targets
 
     # Chooses the new centers as the points farthest away from any other centers
-    def kpp(self, X, pre_centers=None, k=10, random_state=None):
+    def kpp(self, X, pre_centers=None, k=10, random_state=None, n_iterations = 1000):
         random_state = check_random_state(random_state)
 
         if pre_centers is not None:
 
-            C = pre_centers
+            C = pre_centers[:]
 
         else:
 
             C = X[random_state.randint(0, len(X))]
 
         C = C.view(-1, X.shape[1])
+        current_iterations = 0
 
         while C.shape[0] < k:
 
@@ -119,11 +120,17 @@ class K_Means:
             if len((cum_prob >= r).nonzero()) == 0:
                 debug = 0
                 print(f"K++: No center assigned. Iterating again. Current centers: {C.shape[0]}")
+                if current_iterations > n_iterations:
+                    print(f"K++: No center assigned after {n_iterations} iterations. Exiting.")
+                    return None, False
+                current_iterations += 1
             else:
                 ind = (cum_prob >= r).nonzero()[0][0]
                 C = torch.cat((C, X[ind].view(1, -1)), dim=0)
+                current_iterations = 0
+                
 
-        return C
+        return C, True
 
 
     def fit_once(self, X, random_state):
@@ -133,7 +140,14 @@ class K_Means:
         #initialize the centers, the first 'k' elements in the dataset will be our initial centers
 
         if self.init == 'k-means++':
-            centers = self.kpp(X, k=self.k, random_state=random_state)
+            temp_centers, success = self.kpp(X, k=self.k, random_state=random_state)
+            if success is False:
+                random_state = check_random_state(self.random_state)
+                idx = random_state.choice(len(X), self.k, replace=False)
+                for i in range(self.k):
+                    centers[i] = X[idx[i]]
+            else:
+                centers = temp_centers
 
         elif self.init == 'random':
 
@@ -169,7 +183,8 @@ class K_Means:
                     if self.poincare:
                         centers[idx] = P.einstein_midpoint(selected, -self.curv)
                     else:
-                        centers[idx] = L.einstein_midpoint(selected, self.curv)
+                        centers[idx] = L.lorentz_centroid(selected, self.curv)
+                        #centers[idx] = L.einstein_midpoint(selected, self.curv)
                 else:
                     #centers[idx] = L.einstein_midpoint(selected, self.curv) if self.hyperbolic else selected.mean(dim=0)
                     centers[idx] = selected.mean(dim=0)
@@ -207,7 +222,8 @@ class K_Means:
             if self.poincare:
                 l_centers = torch.stack([P.einstein_midpoint(l_feats[idx_list], -self.curv) for idx_list in support_idxs])
             else:
-                l_centers = torch.stack([L.einstein_midpoint(l_feats[idx_list], self.curv) for idx_list in support_idxs])
+                l_centers = torch.stack([L.lorentz_centroid(l_feats[idx_list], self.curv) for idx_list in support_idxs])
+                #l_centers = torch.stack([L.einstein_midpoint(l_feats[idx_list], self.curv) for idx_list in support_idxs])
         else:
             l_centers = torch.stack([l_feats[idx_list].mean(0) for idx_list in support_idxs])
         cat_feats = torch.cat((l_feats, u_feats))
@@ -226,7 +242,15 @@ class K_Means:
 
         #initialize the centers, the first 'k' elements in the dataset will be our initial centers
         if self.init == 'k-means++':
-            centers = self.kpp(u_feats, l_centers, k=self.k, random_state=random_state)
+            temp_centers, success = self.kpp(u_feats, l_centers, k=self.k, random_state=random_state)
+            if success is False:
+                random_state = check_random_state(self.random_state)
+                idx = random_state.choice(len(u_feats), self.k, replace=False)
+                for i in range(self.k):
+                    centers[len(l_classes):i] = u_feats[idx[i]]
+            else:
+                centers = temp_centers
+
         elif self.init == 'random':
 
             random_state = check_random_state(self.random_state)
@@ -278,7 +302,8 @@ class K_Means:
                     if self.poincare:
                         centers[idx] = P.einstein_midpoint(selected, -self.curv)
                     else:
-                        centers[idx] = L.einstein_midpoint(selected, self.curv)
+                        centers[idx] = L.lorentz_centroid(selected, self.curv)
+                        #centers[idx] = L.einstein_midpoint(selected, self.curv)
                 else:
                     #centers[idx] = L.einstein_midpoint(selected, self.curv) if self.hyperbolic else selected.mean(dim=0)
                     centers[idx] = selected.mean(dim=0)
