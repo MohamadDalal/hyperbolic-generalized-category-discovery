@@ -391,3 +391,81 @@ So I just get $\sqrt{\sqrt{x}^2}=\sqrt{x}$ as my final answer. I can simplify my
 $$\mu_{space}=\frac{1}{\sqrt{c}}\frac{\sum_{i=1}^{B}{v_ix_{space,i}}}{\sqrt{|||\sum_{i=1}^{B}{v_ix_{space,i}}||^2-(\sum_{i=1}^{B}{v_ix_{time,i}})^2|}}$$
 
 But that doesn't really matter since I gotta find the full vector anyways. I will also use a weight $v_i=1/B$ to introduce numerical stability to it. I should demonstrate the difference between all the centroids in my project. Just make a circle in Lorentz space and show the computed centroids
+
+# Einstein Midpoint relation to Lorentz Centroid
+
+Einstein midpoint is:
+
+$$\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sqrt{c}\sum_{i=1}^{B}{x_{time,i}}}$$
+
+Lorentz Centroid is:
+
+$$\mu = \frac{1}{\sqrt{c}}\frac{\sum_{i=1}^{B}{v_ix_{L,i}}}{|||\sum_{i=1}^{B}{v_ix_{L,i}}||_{\mathcal{L}}|}$$
+
+Now this centroid can be understood as calculating the ray eminating from the center:
+
+$$L:t\sum_{i=1}^{B}{v_ix_{L,i}}$$
+
+And setting t to equal:
+
+$$t=\frac{1}{\sqrt{c}}\frac{1}{|||\sum_{i=1}^{B}{v_ix_{L,i}}||_{\mathcal{L}}|}$$
+
+In order to get the point laying on the hyperboloid. However, this same ray can be used to find the Lorentz Centroid's equivalent in the Klein model, as both concepts (Lorentz centroid and Lorentz to Klein transformation) use projective geometry as their basis. I think I can use trigonometry to find the location in the Klein hyper-sphere, by first finding the angle the Lorentz centroid ray makes with the vector $e_1=[1,\mathbf{0}]$ and using the tangent rule in right angle triangles to find the point in the Klein model, or the value needed for t. First to find the angle we gotta compute:
+
+$$\cos(\angle(e_1,L))=\frac{e_1\cdot L}{\|e_1\|\|L\|}=\frac{L_{time}}{\|L\|}=\frac{\sum_{i=1}^{B}{v_ix_{time,i}}}{\sqrt{\sum_{i=1}^{B}{v_i\|x_{L,i}\|^2}}}$$
+
+Using the cosine rule we might be able to find the value of t needed to project back to the Klein hyper-sphere:
+
+$$\cos(\angle(e_1,L))=\frac{\|x_K'\|}{\|1/\sqrt{c}e_1\|}=$$
+
+$$\frac{\sum_{i=1}^{B}{v_ix_{time,i}}}{\|L\|}=\frac{1}{\sqrt{c}}\frac{t}{\|L\|}$$
+
+$$t=\sqrt{c}\sum_{i=1}^{B}{v_ix_{time,i}}$$
+
+Meaning that the point in $\mathbb{R}^{n+1}$ equals:
+
+$$\mu'=\frac{\sum_{i=1}^{B}{v_ix_{L,i}}}{\sqrt{c}\sum_{i=1}^{B}{v_ix_{time,i}}}$$
+
+However, since the first dimension of the vector is ignored we end up with:
+
+$$\mu=\frac{\sum_{i=1}^{B}{v_ix_{space,i}}}{\sqrt{c}\sum_{i=1}^{B}{v_ix_{time,i}}}$$
+
+Meaning that the Lorentz Centroid represents the Einstein midpoint in Klein coordinates. Which also means that the Einstein midpoint minimizes the sqaured Lorentzian distance.
+
+## Trying another approach
+
+The Einstein midpoint is calculated as:
+
+$$\mu_K=\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sqrt{c}\sum_{i=1}^{B}{x_{time,i}}}$$
+
+The map from Klein to Lorentz is:
+
+$$x_{space}=\frac{\sqrt{c}}{\sqrt{c-c^2\|x_K\|^2}}x_K=\frac{1}{\sqrt{1-c\|x_K\|^2}}x_K$$
+
+So mapping the Einstein midpoint into Lorentz model produces:
+
+$$\mu_{space}=\frac{1}{\sqrt{1-c\|\mu_K\|^2}}\mu_K=\frac{1}{\sqrt{1-c\|\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sqrt{c}\sum_{i=1}^{B}{x_{time,i}}}\|^2}}\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sqrt{c}\sum_{i=1}^{B}{x_{time,i}}}=\frac{1}{\sqrt{1-\frac{\|\sum_{i=1}^{B}{x_{space, i}}\|^2}{(\sum_{i=1}^{B}{x_{time,i}})^2}}}\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sqrt{c}\sum_{i=1}^{B}{x_{time,i}}}=\frac{1}{\sqrt{c}}\frac{\sum_{i=1}^{B}{x_{space, i}}}{\sqrt{1-\|\sum_{i=1}^{B}{x_{space, i}}\|^2}}$$
+
+I am stuck, so I will just use the previous solution.
+
+## Trying a much simpler approach
+
+The Lorentz Centroid is calculated as:
+
+$$\mu = \frac{1}{\sqrt{c}}\frac{\sum_{i=1}^{B}{v_ix_{L,i}}}{|||\sum_{i=1}^{B}{v_ix_{L,i}}||_{\mathcal{L}}|}$$
+
+Where:
+
+$$\mu_{time} = \frac{1}{\sqrt{c}}\frac{\sum_{i=1}^{B}{v_ix_{time,i}}}{|||\sum_{i=1}^{B}{v_ix_{L,i}}||_{\mathcal{L}}|}$$
+
+$$\mu_{space} = \frac{1}{\sqrt{c}}\frac{\sum_{i=1}^{B}{v_ix_{space,i}}}{|||\sum_{i=1}^{B}{v_ix_{L,i}}||_{\mathcal{L}}|}$$
+
+Since the Lorentz to Klein map is:
+
+$$x_K=\frac{x_{space}}{\sqrt{c}x_{time}}$$
+
+Then we have:
+
+$$\mu_K=\frac{x_{space}}{\sqrt{c}x_{time}}=\frac{1}{\sqrt{c}}\frac{\frac{1}{\sqrt{c}}\frac{\sum_{i=1}^{B}{v_ix_{space,i}}}{|||\sum_{i=1}^{B}{v_ix_{L,i}}||_{\mathcal{L}}|}}{\frac{1}{\sqrt{c}}\frac{\sum_{i=1}^{B}{v_ix_{time,i}}}{|||\sum_{i=1}^{B}{v_ix_{L,i}}||_{\mathcal{L}}|}}=\frac{1}{\sqrt{c}}\frac{\sum_{i=1}^{B}{v_ix_{space,i}}}{\sum_{i=1}^{B}{v_ix_{time,i}}}$$
+
+This is equal to the Einstein midpoint when $v_i=1$.
