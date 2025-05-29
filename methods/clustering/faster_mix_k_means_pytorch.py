@@ -179,12 +179,18 @@ class K_Means:
             for idx in range(self.k):
                 selected = torch.nonzero(labels == idx).squeeze()
                 selected = torch.index_select(X, 0, selected)
+                if len(selected) == 0:
+                    #print("Class number:", idx, "has no samples. Skipping.")
+                    continue
                 if self.hyperbolic:
                     if self.poincare:
                         centers[idx] = P.einstein_midpoint(selected, -self.curv)
                     else:
-                        centers[idx] = L.lorentz_centroid(selected, self.curv)
-                        #centers[idx] = L.einstein_midpoint(selected, self.curv)
+                        L_Centroid = L.lorentz_centroid(selected, self.curv)
+                        if L_Centroid is None:
+                            centers[idx] = L.einstein_midpoint(selected, self.curv)
+                        else:
+                            centers[idx] = L_Centroid
                 else:
                     #centers[idx] = L.einstein_midpoint(selected, self.curv) if self.hyperbolic else selected.mean(dim=0)
                     centers[idx] = selected.mean(dim=0)
@@ -222,7 +228,15 @@ class K_Means:
             if self.poincare:
                 l_centers = torch.stack([P.einstein_midpoint(l_feats[idx_list], -self.curv) for idx_list in support_idxs])
             else:
-                l_centers = torch.stack([L.lorentz_centroid(l_feats[idx_list], self.curv) for idx_list in support_idxs])
+                temp_centers = []
+                for idx_list in support_idxs:
+                    L_Centroid = L.lorentz_centroid(l_feats[idx_list], self.curv)
+                    if L_Centroid is None:
+                        temp_centers.append(L.einstein_midpoint(l_feats[idx_list], self.curv))
+                    else:
+                        temp_centers.append(L_Centroid)
+                l_centers = torch.stack(temp_centers)
+                #l_centers = torch.stack([L.lorentz_centroid(l_feats[idx_list], self.curv) for idx_list in support_idxs])
                 #l_centers = torch.stack([L.einstein_midpoint(l_feats[idx_list], self.curv) for idx_list in support_idxs])
         else:
             l_centers = torch.stack([l_feats[idx_list].mean(0) for idx_list in support_idxs])
@@ -244,6 +258,7 @@ class K_Means:
         if self.init == 'k-means++':
             temp_centers, success = self.kpp(u_feats, l_centers, k=self.k, random_state=random_state)
             if success is False:
+                print("K++ failed. Using random initialization.")
                 random_state = check_random_state(self.random_state)
                 idx = random_state.choice(len(u_feats), self.k, replace=False)
                 for i in range(self.k):
@@ -264,6 +279,7 @@ class K_Means:
 
         # Begin iterations
         best_labels, best_inertia, best_centers = None, None, None
+        all_center_shifts = []
         for it in range(self.max_iterations):
             centers_old = centers.clone()
 
@@ -298,12 +314,18 @@ class K_Means:
 
                 selected = torch.nonzero(labels == idx).squeeze()
                 selected = torch.index_select(cat_feats, 0, selected)
+                if len(selected) == 0:
+                    #print("Class number:", idx, "has no samples. Skipping.")
+                    continue
                 if self.hyperbolic:
                     if self.poincare:
                         centers[idx] = P.einstein_midpoint(selected, -self.curv)
                     else:
-                        centers[idx] = L.lorentz_centroid(selected, self.curv)
-                        #centers[idx] = L.einstein_midpoint(selected, self.curv)
+                        L_Centroid = L.lorentz_centroid(selected, self.curv)
+                        if L_Centroid is None:
+                            centers[idx] = L.einstein_midpoint(selected, self.curv)
+                        else:
+                            centers[idx] = L_Centroid
                 else:
                     #centers[idx] = L.einstein_midpoint(selected, self.curv) if self.hyperbolic else selected.mean(dim=0)
                     centers[idx] = selected.mean(dim=0)
@@ -321,12 +343,12 @@ class K_Means:
                     center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv, eps=1e-6))
             else:
                 center_shift = torch.sum(torch.sqrt(torch.sum((centers - centers_old) ** 2, dim=1)))
-
+            all_center_shifts.append(center_shift.item())
             if center_shift ** 2 < self.tolerance:
                 #break out of the main loop if the results are optimal, ie. the centers don't change their positions much(more than our tolerance)
                 break
 
-        return best_labels, best_inertia, best_centers, i + 1
+        return best_labels, best_inertia, best_centers, i + 1, all_center_shifts
 
 
     def fit(self, X):
@@ -370,7 +392,7 @@ class K_Means:
         if effective_n_jobs(self.n_jobs) == 1:
             for it in range(self.n_init):
 
-                labels, inertia, centers, n_iters = fit_func(u_feats, l_feats, l_targets, random_state)
+                labels, inertia, centers, n_iters, center_shifts = fit_func(u_feats, l_feats, l_targets, random_state)
 
                 if best_inertia is None or inertia < best_inertia:
                     self.labels_ = labels.clone()
@@ -378,6 +400,7 @@ class K_Means:
                     best_inertia = inertia
                     self.inertia_ = inertia
                     self.n_iter_ = n_iters
+                    self.center_shifts_ = center_shifts
 
         else:
 
@@ -387,12 +410,13 @@ class K_Means:
                                                               for seed in seeds)
             # Get results with the lowest inertia
 
-            labels, inertia, centers, n_iters = zip(*results)
+            labels, inertia, centers, n_iters, center_shifts = zip(*results)
             best = np.argmin(inertia)
             self.labels_ = labels[best]
             self.inertia_ = inertia[best]
             self.cluster_centers_ = centers[best]
             self.n_iter_ = n_iters[best]
+            self.center_shifts_ = center_shifts[best]
 
 
 def main():

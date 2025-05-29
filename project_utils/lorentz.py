@@ -295,8 +295,34 @@ def lorentz_centroid(x: Tensor, curv: float | Tensor = 1.0) -> Tensor:
     denom = torch.sqrt(curv*torch.abs(mu_TL_space.pow(2).sum(dim=-1) - mu_TL_time**2))
     center = mu_TL_space / denom
     #assert torch.sqrt(1 / curv + torch.sum(center**2, dim=-1, keepdim=False)).eq(mu_TL_time/denom).all(), "Center is not on the hyperboloid"
-    assert torch.isclose(torch.sqrt(1 / curv + torch.sum(center**2, dim=-1, keepdim=False)), mu_TL_time/denom, atol=1e-5).all(), "Center is not on the hyperboloid"
-    assert torch.isclose(center.pow(2).sum(dim=-1) - (mu_TL_time/denom)**2, torch.tensor(-1/curv)) , "Center is not on the hyperboloid"
+    #assert torch.isclose(torch.sqrt(1 / curv + torch.sum(center**2, dim=-1, keepdim=False)), mu_TL_time/denom, atol=1e-5).all(), "Center is not on the hyperboloid"
+    if not torch.isclose(torch.sqrt(1 / curv + torch.sum(center**2, dim=-1, keepdim=False)), mu_TL_time/denom, atol=1e-5).all():
+        print("Center's time component does not match the expected value")
+        # print(x.isnan().any())
+        # print(x.shape)
+        # print(x)
+        # print(x_time.isnan().any())
+        # print(denom)
+        # print(mu_TL_space.isnan().any())
+        # print(mu_TL_time)
+        # print(torch.sqrt(1 / curv + torch.sum(center**2, dim=-1, keepdim=False)))
+        # print(mu_TL_time/denom)
+        print(torch.sqrt(1 / curv + torch.sum(center**2, dim=-1, keepdim=False)) - mu_TL_time/denom)
+        return None
+    #assert torch.isclose(center.pow(2).sum(dim=-1) - (mu_TL_time/denom)**2, torch.tensor(-1/curv)) , "Center is not on the hyperboloid"
+    if not torch.isclose(center.pow(2).sum(dim=-1) - (mu_TL_time/denom)**2, torch.tensor(-1/curv)):
+        print("Center is not on the hyperboloid. Reverting to Einstein midpoint as a fallback")
+        # print(x.isnan().any())
+        # print(x.shape)
+        # print(x)
+        # print(x_time.isnan().any())
+        # print(denom)
+        # print(mu_TL_space.isnan().any())
+        # print(mu_TL_time)
+        # print(center.pow(2).sum(dim=-1) - (mu_TL_time/denom)**2)
+        # print(torch.tensor(-1/curv))
+        print((center.pow(2).sum(dim=-1) - (mu_TL_time/denom)**2) - torch.tensor(-1/curv))
+        return None
     return center
 
 def half_aperture(
