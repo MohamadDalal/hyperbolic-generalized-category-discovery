@@ -12,6 +12,7 @@ from project_utils.cluster_and_log_utils import log_accs_from_preds
 from methods.clustering.feature_vector_dataset import FeatureVectorDataset
 from data.get_datasets import get_datasets, get_class_splits
 from methods.clustering.faster_mix_k_means_pytorch import K_Means as SemiSupKMeans
+from methods.test_outputs.test_outputs import test_cluster
 
 from tqdm import tqdm
 from config import feature_extract_dir
@@ -41,7 +42,7 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
 
         feats = feats.to(device)
 
-        feats = torch.nn.functional.normalize(feats, dim=-1)
+        feats = feats if args.hyperbolic else torch.nn.functional.normalize(feats, dim=-1)
 
         all_feats.append(feats.cpu().numpy())
         targets = np.append(targets, label.cpu().numpy())
@@ -64,7 +65,7 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
 
     print('Fitting Semi-Supervised K-Means...')
     if args.hyperbolic:
-        kmeans = SemiSupKMeans(k=K, tolerance=1e-4, max_iterations=args.max_kmeans_iter, init='random',
+        kmeans = SemiSupKMeans(k=K, tolerance=1e-4, max_iterations=args.max_kmeans_iter, init='k-means++',
                             n_init=args.k_means_init, random_state=None, n_jobs=None, pairwise_batch_size=None, mode=None,
                             hyperbolic=True, curv=args.curvature, poincare=args.poincare)
     else:
@@ -190,4 +191,11 @@ if __name__ == "__main__":
     print('Performing SS-K-Means on all in the training data...')
     all_acc, old_acc, new_acc, kmeans = test_kmeans_semi_sup(train_loader, args, K=args.K)
     cluster_save_path = os.path.join(args.save_dir, 'ss_kmeans_cluster_centres.pt')
+    center_shifts_path = os.path.join(args.save_dir, 'ss_kmeans_center_shifts.pt')
     torch.save(kmeans.cluster_centers_, cluster_save_path)
+    torch.save(kmeans.center_shifts_, center_shifts_path)
+    test_cluster(test_loader, kmeans.cluster_centers_, args, device)
+    for n, i in enumerate(kmeans.cluster_centers_):
+        if i.isnan().any():
+            print(f'Cluster {n} centre is NaN!')
+        #print(f'Cluster {n} centre: {i}')

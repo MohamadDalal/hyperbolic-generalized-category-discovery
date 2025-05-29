@@ -16,28 +16,44 @@ from data.get_datasets import get_datasets, get_class_splits
 from tqdm import tqdm
 from config import feature_extract_dir
 import project_utils.lorentz as L
+import project_utils.poincare as P
 
 #import warnings
 #warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 
-def test_cluster(dataloader, centers, args):
+def test_cluster(dataloader, centers, args, device):
     # Find pairwise distance between test features and cluster centers
     # Use argmin function to assign each feature to the class of closest center
     # Pass predictions with ground truth's and masks to log_accs_from_preds to get accuracies
     preds = []
     targets = []
     mask = []
+    debug_dist = torch.tensor([[]], device=device)
+    debug_data = None
+    centers = centers[:-1]
     # First extract all features
-    for batch_idx, (feats, label, _, mask_lab_) in enumerate(tqdm(test_loader)):
+    for batch_idx, (feats, label, _, mask_lab_) in enumerate(tqdm(dataloader)):
 
         feats = feats.to(device)
         label = label.to(device)
 
-        feats = torch.nn.functional.normalize(feats, dim=-1)
-
-        dist = L.pairwise_dist(feats, centers, args.curvature, 1e-6) if args.hyperbolic else pairwise_distance(feats, centers)
+        if args.hyperbolic:
+            if args.poincare:
+                dist = P.pairwise_dist(feats, centers, -args.curvature, 1e-6)
+            else:
+                dist = L.pairwise_dist(feats, centers, args.curvature, 1e-6)
+        else:
+            feats = torch.nn.functional.normalize(feats, dim=-1)
+            dist = pairwise_distance(feats, centers)
+        #print(dist.shape)
+        if batch_idx == 0:
+            debug_dist = dist
+            debug_data = feats
+        else:
+            debug_dist = torch.concatenate([debug_dist, dist], dim=0)
+            debug_data = torch.concatenate([debug_data, feats], dim=0)
         pred = torch.argmin(dist, dim=1)
 
         preds = np.append(preds, pred.cpu().numpy())
@@ -45,7 +61,37 @@ def test_cluster(dataloader, centers, args):
         mask = np.append(mask, np.array([True if x.item() in range(len(args.train_classes))
                                          else False for x in label]))
 
-    return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs, save_name="")
+    # print(debug_dist.shape)
+    # print(debug_dist.mean(dim=0))
+    # print(debug_dist.std(dim=0))
+    # print(debug_data.shape)
+    # print(debug_data.norm(dim=1).mean())
+    # print(debug_data.norm(dim=1).max())
+    # print(debug_data.norm(dim=1).min())
+    # print(debug_data.norm(dim=1).std())
+    # print(centers.shape)
+    # print(centers.norm(dim=1).mean())
+    # print(centers.norm(dim=1).max())
+    # print(centers.norm(dim=1).min())
+    # print(centers.norm(dim=1).std())
+    # #print(debug_data.abs().max(dim=0)[0])
+    # #print(debug_data.abs().min(dim=0)[0])
+    # print(debug_data.std(dim=0))
+    # print(centers.std(dim=0))
+    # print(preds.shape)
+    # # if args.hyperbolic:
+    # #     if args.poincare:
+    # #         dist = P.pairwise_dist(debug_data, debug_data, -args.curvature, 1e-6)
+    # #     else:
+    # #         dist = L.pairwise_dist(debug_data, debug_data, args.curvature, 1e-6)
+    # # else:
+    # #     debug_data = torch.nn.functional.normalize(debug_data, dim=-1)
+    # #     dist = pairwise_distance(debug_data, debug_data)
+    # # print(dist.shape)
+    # # print(dist.mean(dim=0))
+    # # print(dist.std(dim=0))
+    print(np.unique(preds, return_counts=True))
+    return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs, save_name="", print_output=True)
 
     
 
@@ -65,6 +111,7 @@ if __name__ == "__main__":
     parser.add_argument('--prop_train_labels', type=float, default=0.5) # Decides what percentage of the labelled dataset to use?
     parser.add_argument('--eval_funcs', nargs='+', help='Which eval functions to use', default=['v1', 'v2'])
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
+    parser.add_argument('--poincare', type=str2bool, default=False)
 
     # ----------------------
     # INIT
@@ -118,5 +165,5 @@ if __name__ == "__main__":
     cluster_centers = torch.load(cluster_load_path, weights_only=False)
 
     print('Testing cluster centers on test set...')
-    all_acc, old_acc, new_acc= test_cluster(test_loader, cluster_centers, args)
+    all_acc, old_acc, new_acc= test_cluster(test_loader, cluster_centers, args, device)
     print(f"all: {all_acc}, old: {old_acc}, new: {new_acc}")
