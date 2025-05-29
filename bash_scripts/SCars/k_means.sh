@@ -39,5 +39,5 @@ nvidia-smi
 #echo $EXP_NUM
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.k_means --dataset 'scars' --semi_sup 'True' --use_ssb_splits 'True' \
- --use_best_model 'True' --eval_funcs "v2" --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id 'Euclidean'  #--K 154
+ --use_best_model 'False' --eval_funcs "v2" --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id 'Euclidean'  #--K 154
  #> ${SAVE_DIR}logfile_${EXP_NUM}.out
