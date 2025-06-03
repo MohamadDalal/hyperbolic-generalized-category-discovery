@@ -33,4 +33,4 @@ nvidia-smi
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset scars --use_best_model 'False' \
  --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/SCars-DINOv2-Train/checkpoints/model_best_loss.pt' \
- --exp_id '_Euclidean-DINOv2' --hyperbolic 'False' --remove_dyno_head 'False' --use_dinov2 'True' \
+ --exp_id '_Euclidean-DINOv2' --hyperbolic 'False' --remove_dyno_head 'True' --use_dinov2 'True' --mlp_out_dim 65536 \

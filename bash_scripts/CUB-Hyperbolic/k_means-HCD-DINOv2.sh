@@ -39,5 +39,5 @@ nvidia-smi
 #echo $EXP_NUM
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.k_means --dataset 'cub' --semi_sup 'True' --use_ssb_splits 'True' \
- --use_best_model 'False' --max_kmeans_iter 200 --k_means_init 100  --warmup_model_exp_id 'Hyperbolic-HCD-DINOv2_Euclidean' --hyperbolic 'False' --poincare 'False' #--K 100
+ --use_best_model 'False' --max_kmeans_iter 200 --k_means_init 100  --warmup_model_exp_id 'Hyperbolic-HCD-DINOv2' --hyperbolic 'True' --poincare 'True' --random_seed 7734 #--K 100
  #> ${SAVE_DIR}logfile_${EXP_NUM}.out

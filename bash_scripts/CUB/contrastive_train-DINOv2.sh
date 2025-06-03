@@ -59,6 +59,7 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --hyperbolic 'False' \
             --kmeans 'False' \
             --kmeans_frequency 300 \
+            --mlp_out_dim 65536 \
             --max_grad_norm 100.0 \
             --avg_grad_norm 100.0 \
             --use_dinov2 'True' \
