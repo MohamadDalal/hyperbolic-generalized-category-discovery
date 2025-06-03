@@ -821,6 +821,7 @@ if __name__ == "__main__":
     best_test_acc = 0
     best_loss = 1e10
     if not args.checkpoint_path is None:
+            print(f'Loading checkpoint from {args.checkpoint_path}')
             checkpoint = torch.load(args.checkpoint_path, map_location=device, weights_only=False)
             if not "model_state_dict" in checkpoint.keys():
                 model.load_state_dict(checkpoint)
