@@ -285,8 +285,8 @@ if __name__ == "__main__":
     # Save model parameters
     if args.hyperbolic:
         print('Saving hyperbolic curvature and projection alpha...')
-        print(f'Curvature: {model[1].get_curvature()}')
+        print(f'Curvature: {model[1].get_curvature().item()}')
         print(f'Projection alpha: {model[1].get_proj_alpha()}')
-        torch.save({"curvature": model[1].get_curvature(), "proj_alpha": model[1].get_proj_alpha()}, os.path.join(args.save_dir, 'extra_params.pth'))
+        torch.save({"curvature": model[1].get_curvature().item(), "proj_alpha": model[1].get_proj_alpha()}, os.path.join(args.save_dir, 'extra_params.pth'))
 
     print('Done!')

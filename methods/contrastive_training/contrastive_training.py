@@ -453,8 +453,8 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
                         step_log_dict["step/train/cliped_embed2_stddiv"] = output_log_stats[3][1]
                         step_log_dict["step/train/cliped_embed2_max"] = output_log_stats[3][2]
                         step_log_dict["step/train/cliped_embed2_min"] = output_log_stats[3][3] 
-                    step_log_dict["step/train/curvature"] = model[1].get_curvature()
-                    step_log_dict["step/train/proj_alpha"] = model[1].get_proj_alpha()
+                    step_log_dict["step/train/curvature"] = model[1].get_curvature().item()
+                    step_log_dict["step/train/proj_alpha"] = model[1].get_proj_alpha().item()
                     step_log_dict["step/train/hyp_embed_mean"] = output_log_stats[1][0]
                     step_log_dict["step/train/hyp_embed_stddiv"] = output_log_stats[1][1]
                     step_log_dict["step/train/hyp_embed_max"] = output_log_stats[1][2]
@@ -501,10 +501,10 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
             epoch_log_dict["epoch/train/dist_sup_con_loss"] = dist_sup_con_loss_record.avg
             epoch_log_dict["epoch/train/angle_sup_con_loss"] = angle_sup_con_loss_record.avg
         if args.hyperbolic:
-            print(f"Current curvature: {model[1].get_curvature()}")
-            print(f"Current projection weight: {model[1].get_proj_alpha()}")
-            epoch_log_dict["epoch/train/curvature"] = model[1].get_curvature()
-            epoch_log_dict["epoch/train/proj_alpha"] = model[1].get_proj_alpha()
+            print(f"Current curvature: {model[1].get_curvature().item()}")
+            print(f"Current projection weight: {model[1].get_proj_alpha().item()}")
+            epoch_log_dict["epoch/train/curvature"] = model[1].get_curvature().item()
+            epoch_log_dict["epoch/train/proj_alpha"] = model[1].get_proj_alpha().item()
 
         if loss.isnan():
             break
@@ -613,7 +613,7 @@ def test_kmeans(model, test_loader,
     all_feats = np.concatenate(all_feats)
     if args.hyperbolic:
         #TODO: Investigate why K++ is failing to assign more than one center (Points too close to one another maybe?)
-        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=model[1].get_curvature(),
+        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=model[1].get_curvature().item(),
                                init="k-means++", poincare=args.poincare)
         kmeans.fit(all_feats)
         preds = kmeans.labels_.numpy()

@@ -431,13 +431,13 @@ class Hyperbolic_DINOHead(nn.Module):
         """
         Returns the curvature parameter.
         """
-        return self.curv.exp().item()
+        return self.curv.exp()
     
     def get_proj_alpha(self):
         """
         Returns the projection weight parameter.
         """
-        return self.proj_alpha.exp().item()
+        return self.proj_alpha.exp()
 
 class VisionTransformerWithLinear(nn.Module):
 
