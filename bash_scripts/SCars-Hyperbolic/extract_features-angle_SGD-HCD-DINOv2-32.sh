@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-Extract-SCars-Hyperbolic-Angle-SGD-HCD-DINOv2-Learn-Curv.log"
-#SBATCH --job-name="GCD-Extract-SCars-Hyperbolic-Angle-SGD-HCD-DINOv2-Learn-Curv"
+#SBATCH --output="logs/GCD-Extract-SCars-Hyperbolic-Angle-SGD-HCD-DINOv2-32.log"
+#SBATCH --job-name="GCD-Extract-SCars-Hyperbolic-Angle-SGD-HCD-DINOv2-32"
 #SBATCH --time=2:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
@@ -16,7 +16,7 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-Extract-SCars-Hyperbolic-Angle-SGD-HCD-DINOv2-Learn-Curv.out"
+outfile="logs/GCD-Extract-SCars-Hyperbolic-Angle-SGD-HCD-DINOv2-32.out"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -32,5 +32,5 @@ nvidia-smi
 #export CUDA_VISIBLE_DEVICES=0
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset scars --use_best_model 'False' \
- --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/SCars-Hyperbolic-Angle-SGD-HCD-DINOv2-Learn-Curv-Train/checkpoints/model_best_loss.pt' \
- --exp_id '_Hyperbolic-Angle-SGD-HCD-DINOv2-Learn-Curv' --hyperbolic 'True' --poincare 'False' --euclidean_clipping 2.3 --remove_dyno_head 'False' --mlp_out_dim 256 --use_dinov2 'True'
+ --warmup_model_dir '/ceph/home/student.aau.dk/mdalal20/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/SCars-Hyperbolic-Angle-SGD-HCD-DINOv2-32-Train/checkpoints/model_best_loss.pt' \
+ --exp_id '_Hyperbolic-Angle-SGD-HCD-DINOv2-32_Euclidean' --hyperbolic 'True' --poincare 'False' --euclidean_clipping 2.3 --remove_dyno_head 'True' --mlp_out_dim 32 --use_dinov2 'True'

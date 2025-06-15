@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --output="logs/GCD-KMeans-Aircraft-Hyperbolic-Angle-SGD-HCD-DINOv2-Learn-Curv.log"
-#SBATCH --job-name="GCD-KMeans-Aircraft-Hyperbolic-Angle-SGD-HCD-DINOv2-Learn-Curv"
+#SBATCH --output="logs/GCD-KMeans-Aircraft-Hyperbolic-Angle-SGD-HCD-DINOv2-32.log"
+#SBATCH --job-name="GCD-KMeans-Aircraft-Hyperbolic-Angle-SGD-HCD-DINOv2-32"
 #SBATCH --time=12:00:00
 #SBATCH --signal=B:SIGTERM@30
 #SBATCH --gres=gpu:1
@@ -16,7 +16,7 @@
 container_path="${HOME}/pytorch-24.08.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-KMeans-Aircraft-Hyperbolic-Angle-SGD-HCD-DINOv2-Learn-Curv.out"
+outfile="logs/GCD-KMeans-Aircraft-Hyperbolic-Angle-SGD-HCD-DINOv2-32.out"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -39,5 +39,5 @@ nvidia-smi
 #echo $EXP_NUM
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.k_means --dataset 'aircraft' --semi_sup 'True' --use_ssb_splits 'True' \
- --use_best_model 'False' --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id 'Hyperbolic-Angle-SGD-HCD-DINOv2-Learn-Curv' --hyperbolic 'True' --poincare 'False' #--K 50
+ --use_best_model 'False' --max_kmeans_iter 200 --k_means_init 100 --warmup_model_exp_id 'Hyperbolic-Angle-SGD-HCD-DINOv2-32_Euclidean' --hyperbolic 'False' --poincare 'False' #--K 50
  #> ${SAVE_DIR}logfile_${EXP_NUM}.out

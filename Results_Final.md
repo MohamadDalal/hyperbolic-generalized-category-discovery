@@ -161,6 +161,18 @@ Embedding Dimension:
 
 | Dataset  | Hyp_Kmeans | Acc_All | Acc_Old | Acc_New | wandb                                                                  | Experiment              |
 | -------- | ---------- | ------- | ------- | ------- | ---------------------------------------------------------------------- | ----------------------- |
+| Aircraft | True       | 57.010% | 67.270% | 46.730% | [27ho66n4](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/27ho66n4) | Lorentz HCD Setup 32    |
+| Aircraft | False      | 57.730% | 67.810% | 41.620% | [27ho66n4](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/27ho66n4) | Lorentz HCD Setup 32    |
+| CUB      | True       | 54.730% | 81.350% | 50.580% | [c3sx9h77](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/c3sx9h77) | Lorentz HCD Setup 32    |
+| CUB      | False      | 68.400% | 78.990% | 57.900% | [c3sx9h77](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/c3sx9h77) | Lorentz HCD Setup 32    |
+| SCars    | True       | 70.730% | 85.920% | 56.070% | [8iur5kz7](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/8iur5kz7) | Lorentz HCD Setup 32    |
+| SCars    | False      | 70.610% | 85.840% | 55.920% | [8iur5kz7](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/8iur5kz7) | Lorentz HCD Setup 32    |
+| Aircraft | True       | 54.130% | 70.200% | 56.040% | [2oycvr2i](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/2oycvr2i) | Lorentz HCD Setup 64    |
+| Aircraft | False      | 64.900% | 73.560% | 56.220% | [2oycvr2i](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/2oycvr2i) | Lorentz HCD Setup 64    |
+| CUB      | True       | 73.210% | 84.710% | 61.820% | [ov851wgy](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/ov851wgy) | Lorentz HCD Setup 64    |
+| CUB      | False      | 72.520% | 81.690% | 63.440% | [ov851wgy](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/ov851wgy) | Lorentz HCD Setup 64    |
+| SCars    | True       | 74.580% | 87.540% | 62.080% | [ws1vf8gc](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/ws1vf8gc) | Lorentz HCD Setup 64    |
+| SCars    | False      | 72.040% | 83.460% | 61.030% | [ws1vf8gc](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/ws1vf8gc) | Lorentz HCD Setup 64    |
 | Aircraft | True       | 65.560% | 72.120% | 58.980% | [jgsafl73](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/jgsafl73) | Lorentz HCD Setup 128   |
 | Aircraft | False      | 63.910% | 72.000% | 55.800% | [jgsafl73](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/jgsafl73) | Lorentz HCD Setup 128   |
 | CUB      | True       | 73.010% | 84.120% | 61.990% | [9ild8vw2](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/9ild8vw2) | Lorentz HCD Setup 128   |
@@ -188,20 +200,26 @@ Embedding Dimension:
 
 Learning Curvature
 
-| Dataset  | Hyp_Kmeans | Acc_All | Acc_Old | Acc_New | wandb                                                                  | Experiment                   |
-| -------- | ---------- | ------- | ------- | ------- | ---------------------------------------------------------------------- | ---------------------------- |
-| Aircraft | True       | 61.690% | 66.130% | 57.250% | [jgsafl73](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/jgsafl73) | Lorentz HCD Setup            |
-| Aircraft | False      | 60.970% | 70.320% | 51.590% | [jgsafl73](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/jgsafl73) | Lorentz HCD Setup            |
-| CUB      | True       | 73.040% | 83.700% | 62.470% | [9ild8vw2](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/9ild8vw2) | Lorentz HCD Setup            |
-| CUB      | False      | 72.950% | 82.070% | 63.920% | [9ild8vw2](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/9ild8vw2) | Lorentz HCD Setup            |
-| SCars    | True       | 76.180% | 90.980% | 61.910% | [y4ewbdoi](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/y4ewbdoi) | Lorentz HCD Setup            |
-| SCars    | False      | 72.500% | 86.850% | 58.660% | [y4ewbdoi](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/y4ewbdoi) | Lorentz HCD Setup            |
-| Aircraft | True       | 61.360% | 75.840% | 46.850% | [jgsafl73](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/jgsafl73) | Lorentz HCD Setup Learn Curv |
-| Aircraft | False      | 63.370% | 74.820% | 51.890% | [jgsafl73](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/jgsafl73) | Lorentz HCD Setup Learn Curv |
-| CUB      | True       | 64.070% | 81.900% | 46.390% | [9ild8vw2](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/9ild8vw2) | Lorentz HCD Setup Learn Curv |
-| CUB      | False      | 67.220% | 81.100% | 53.470% | [9ild8vw2](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/9ild8vw2) | Lorentz HCD Setup Learn Curv |
-| SCars    | True       | 66.930% | 83.690% | 50.770% | [y4ewbdoi](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/y4ewbdoi) | Lorentz HCD Setup Learn Curv |
-| SCars    | False      | 67.070% | 81.480% | 53.160% | [y4ewbdoi](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/y4ewbdoi) | Lorentz HCD Setup Learn Curv |
+| Dataset  | Hyp_Kmeans | Acc_All | Acc_Old | Acc_New | wandb                                                                  | Experiment                         |
+| -------- | ---------- | ------- | ------- | ------- | ---------------------------------------------------------------------- | ---------------------------------- |
+| Aircraft | True       | 61.690% | 66.130% | 57.250% | [jgsafl73](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/jgsafl73) | Lorentz HCD Setup                  |
+| Aircraft | False      | 60.970% | 70.320% | 51.590% | [jgsafl73](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/jgsafl73) | Lorentz HCD Setup                  |
+| CUB      | True       | 73.040% | 83.700% | 62.470% | [9ild8vw2](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/9ild8vw2) | Lorentz HCD Setup                  |
+| CUB      | False      | 72.950% | 82.070% | 63.920% | [9ild8vw2](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/9ild8vw2) | Lorentz HCD Setup                  |
+| SCars    | True       | 76.180% | 90.980% | 61.910% | [y4ewbdoi](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/y4ewbdoi) | Lorentz HCD Setup                  |
+| SCars    | False      | 72.500% | 86.850% | 58.660% | [y4ewbdoi](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/y4ewbdoi) | Lorentz HCD Setup                  |
+| Aircraft | True       | 61.360% | 75.840% | 46.850% | [jgsafl73](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/jgsafl73) | Lorentz HCD Setup Learn Curv       |
+| Aircraft | False      | 63.370% | 74.820% | 51.890% | [jgsafl73](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/jgsafl73) | Lorentz HCD Setup Learn Curv       |
+| CUB      | True       | 64.070% | 81.900% | 46.390% | [9ild8vw2](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/9ild8vw2) | Lorentz HCD Setup Learn Curv       |
+| CUB      | False      | 67.220% | 81.100% | 53.470% | [9ild8vw2](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/9ild8vw2) | Lorentz HCD Setup Learn Curv       |
+| SCars    | True       | 66.930% | 83.690% | 50.770% | [y4ewbdoi](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/y4ewbdoi) | Lorentz HCD Setup Learn Curv       |
+| SCars    | False      | 67.070% | 81.480% | 53.160% | [y4ewbdoi](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/y4ewbdoi) | Lorentz HCD Setup Learn Curv       |
+| Aircraft | True       | 58.600% | 66.730% | 50.450% | [83tmrkj9](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/83tmrkj9) | Lorentz HCD Setup Learn Curv Fixed |
+| Aircraft | False      | 63.070% | 75.840% | 50.270% | [83tmrkj9](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/83tmrkj9) | Lorentz HCD Setup Learn Curv Fixed |
+| CUB      | True       | 61.240% | 80.030% | 42.610% | [leutd2es](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/leutd2es) | Lorentz HCD Setup Learn Curv Fixed |
+| CUB      | False      | 64.700% | 78.120% | 51.410% | [leutd2es](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/leutd2es) | Lorentz HCD Setup Learn Curv Fixed |
+| SCars    | True       | 66.840% | 84.320% | 49.990% | [7wls8ewz](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/7wls8ewz) | Lorentz HCD Setup Learn Curv Fixed |
+| SCars    | False      | 68.160% | 84.570% | 52.330% | [7wls8ewz](https://wandb.ai/mohamaddalal/Hyperbolic_GCD/runs/7wls8ewz) | Lorentz HCD Setup Learn Curv Fixed |
 
 AdamW
 
