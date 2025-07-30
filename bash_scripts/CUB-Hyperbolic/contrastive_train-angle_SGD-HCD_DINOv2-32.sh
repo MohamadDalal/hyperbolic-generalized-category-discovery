@@ -40,7 +40,7 @@ nvidia-smi
 
 srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.contrastive_training.contrastive_training \
             --dataset_name 'cub' \
-            --batch_size 32 \
+            --batch_size 128 \
             --grad_from_block 11 \
             --epochs 200 \
             --epochs_warmup 20 \
