@@ -23,15 +23,15 @@ import project_utils.poincare as P
 
 
 
-def test_cluster(dataloader, centers, args, device):
+def test_cluster(dataloader, centers, args, device, return_ind = False):
     # Find pairwise distance between test features and cluster centers
     # Use argmin function to assign each feature to the class of closest center
     # Pass predictions with ground truth's and masks to log_accs_from_preds to get accuracies
     preds = []
     targets = []
     mask = []
-    debug_dist = torch.tensor([[]], device=device)
-    debug_data = None
+    # debug_dist = torch.tensor([[]], device=device)
+    # debug_data = None
     centers = centers[:-1]
     # First extract all features
     for batch_idx, (feats, label, _, mask_lab_) in enumerate(tqdm(dataloader)):
@@ -48,18 +48,22 @@ def test_cluster(dataloader, centers, args, device):
             feats = torch.nn.functional.normalize(feats, dim=-1)
             dist = pairwise_distance(feats, centers)
         #print(dist.shape)
-        if batch_idx == 0:
-            debug_dist = dist
-            debug_data = feats
-        else:
-            debug_dist = torch.concatenate([debug_dist, dist], dim=0)
-            debug_data = torch.concatenate([debug_data, feats], dim=0)
+        # if batch_idx == 0:
+        #     debug_dist = dist
+        #     debug_data = feats
+        # else:
+        #     debug_dist = torch.concatenate([debug_dist, dist], dim=0)
+        #     debug_data = torch.concatenate([debug_data, feats], dim=0)
         pred = torch.argmin(dist, dim=1)
 
         preds = np.append(preds, pred.cpu().numpy())
         targets = np.append(targets, label.cpu().numpy())
         mask = np.append(mask, np.array([True if x.item() in range(len(args.train_classes))
                                          else False for x in label]))
+        if return_ind:
+            torch.save(preds, os.path.join(args.debug_test_dir, "predictions"))
+            torch.save(targets, os.path.join(args.debug_test_dir, "targets"))
+            torch.save(mask, os.path.join(args.debug_test_dir, "mask"))
 
     # print(debug_dist.shape)
     # print(debug_dist.mean(dim=0))
@@ -91,7 +95,7 @@ def test_cluster(dataloader, centers, args, device):
     # # print(dist.mean(dim=0))
     # # print(dist.std(dim=0))
     print(np.unique(preds, return_counts=True))
-    return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs, save_name="", print_output=True)
+    return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs, save_name="", print_output=True, return_ind=return_ind)
 
     
 
@@ -109,7 +113,7 @@ if __name__ == "__main__":
     parser.add_argument('--model_name', type=str, default='vit_dino', help='Format is {model_name}_{pretrain}')
     parser.add_argument('--dataset_name', type=str, default='aircraft', help='options: cifar10, cifar100, scars')
     parser.add_argument('--prop_train_labels', type=float, default=0.5) # Decides what percentage of the labelled dataset to use?
-    parser.add_argument('--eval_funcs', nargs='+', help='Which eval functions to use', default=['v1', 'v2'])
+    parser.add_argument('--eval_funcs', nargs='+', help='Which eval functions to use', default=['v2'])
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
     parser.add_argument('--poincare', type=str2bool, default=False)
 
@@ -137,6 +141,11 @@ if __name__ == "__main__":
         print(f'Using pretrained {args.model_name} features...')
 
     print(args.save_dir)
+    args.debug_test_dir = os.path.join(args.save_dir, "debug_test")
+    print("Will output debug stuff in:", args.debug_test_dir)
+    if not os.path.exists(args.debug_test_dir):
+        print(args.debug_test_dir, "does not exist. Creating...")
+        os.makedirs(args.debug_test_dir)
 
     # --------------------
     # LOAD PARAMETERS
@@ -165,5 +174,8 @@ if __name__ == "__main__":
     cluster_centers = torch.load(cluster_load_path, weights_only=False)
 
     print('Testing cluster centers on test set...')
-    all_acc, old_acc, new_acc= test_cluster(test_loader, cluster_centers, args, device)
+    all_acc, old_acc, new_acc, ind, w = test_cluster(test_loader, cluster_centers, args, device, return_ind=True)
+    torch.save(ind, os.path.join(args.debug_test_dir, "index_map"))
+    torch.save(w, os.path.join(args.debug_test_dir, "scores_matrix"))
+
     print(f"all: {all_acc}, old: {old_acc}, new: {new_acc}")
