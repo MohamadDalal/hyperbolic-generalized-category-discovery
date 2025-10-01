@@ -6,8 +6,10 @@ matplotlib
 pandas
 Pillow
 scikit_learn
+joblib
 scipy
 timm
 torch
 torchvision
 wandb
+xformers
