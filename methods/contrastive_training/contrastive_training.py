@@ -614,7 +614,7 @@ def test_kmeans(model, test_loader,
     if args.hyperbolic:
         #TODO: Investigate why K++ is failing to assign more than one center (Points too close to one another maybe?)
         kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=model[1].get_curvature().item(),
-                               init="k-means++", poincare=args.poincare)
+                               init="k-means++", poincare=args.poincare, cluster_size=args.cluster_size)
         kmeans.fit(all_feats)
         preds = kmeans.labels_.numpy()
     else:
@@ -685,6 +685,7 @@ if __name__ == "__main__":
     parser.add_argument('--use_dinov2', type=str2bool, default=False)
     parser.add_argument('--max_grad_norm', type=float, default=1.0)
     parser.add_argument('--avg_grad_norm', type=float, default=2.5)
+    parser.add_argument('--cluster_size', type=int, default=None, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means. Only works with hyperbolic learning.')
 
     # ----------------------
     # INIT

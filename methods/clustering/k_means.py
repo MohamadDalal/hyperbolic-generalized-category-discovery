@@ -67,10 +67,11 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
     if args.hyperbolic:
         kmeans = SemiSupKMeans(k=K, tolerance=1e-4, max_iterations=args.max_kmeans_iter, init='k-means++',
                             n_init=args.k_means_init, random_state=args.random_seed, n_jobs=None, pairwise_batch_size=None, mode=None,
-                            hyperbolic=True, curv=args.curvature, poincare=args.poincare)
+                            hyperbolic=True, curv=args.curvature, poincare=args.poincare, cluster_size=args.cluster_size)
     else:
         kmeans = SemiSupKMeans(k=K, tolerance=1e-4, max_iterations=args.max_kmeans_iter, init='k-means++',
-                            n_init=args.k_means_init, random_state=args.random_seed, n_jobs=None, pairwise_batch_size=1024, mode=None)
+                            n_init=args.k_means_init, random_state=args.random_seed, n_jobs=None, pairwise_batch_size=1024, mode=None,
+                            cluster_size=args.cluster_size)
 
     l_feats, u_feats, l_targets, u_targets = (torch.from_numpy(x).to(device) for
                                               x in (l_feats, u_feats, l_targets, u_targets))
@@ -121,6 +122,7 @@ if __name__ == "__main__":
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
     parser.add_argument('--poincare', type=str2bool, default=False)
     parser.add_argument('--random_seed', type=int, default=None, help='Random seed for reproducibility')
+    parser.add_argument('--cluster_size', type=int, default=None, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means')
 
     # ----------------------
     # INIT

@@ -2,7 +2,7 @@ import numpy as np
 import copy
 import random
 from project_utils.cluster_utils import cluster_acc
-from sklearn.utils._joblib import Parallel, delayed, effective_n_jobs
+from joblib import Parallel, delayed, effective_n_jobs
 from sklearn.utils import check_random_state
 import project_utils.lorentz as L
 import project_utils.poincare as P
@@ -47,12 +47,12 @@ def pairwise_distance(data1, data2, batch_size=None):
     #  torch.cuda.empty_cache()
     return dis
 
-
+# TODO: Consider doing all this on GPU?
 class K_Means:
 
     def __init__(self, k=3, tolerance=1e-4, max_iterations=100, init='k-means++',
                  n_init=10, random_state=None, n_jobs=None, pairwise_batch_size=None, mode=None,
-                 hyperbolic=False, curv = 1.0, poincare=False):
+                 hyperbolic=False, curv = 1.0, poincare=False, cluster_size=None):
         self.k = k
         self.tolerance = tolerance
         self.max_iterations = max_iterations
@@ -65,6 +65,7 @@ class K_Means:
         self.hyperbolic = hyperbolic
         self.curv = curv
         self.poincare = poincare
+        self.cluster_size = cluster_size
 
     def split_for_val(self, l_feats, l_targets, val_prop=0.2):
 
@@ -243,6 +244,9 @@ class K_Means:
         cat_feats = torch.cat((l_feats, u_feats))
 
         centers = torch.zeros([self.k, cat_feats.shape[1]]).type_as(cat_feats)
+        prob_centers = torch.ones([self.k]).type_as(cat_feats).cpu()
+        prob_centers_labelled = torch.zeros([self.k]).type_as(cat_feats).cpu()
+
         centers[:len(l_classes)] = l_centers
 
         labels = -torch.ones(len(cat_feats)).type_as(cat_feats).long()
@@ -279,8 +283,119 @@ class K_Means:
 
         # Begin iterations
         best_labels, best_inertia, best_centers = None, None, None
+        cluster_size=self.cluster_size
+        for idx in range(self.k):
+            prob_centers[idx] = (labels == idx).float().sum()
+
+        cluster_free=torch.zeros_like(labels[l_num:]).bool()
+        sparse_cluster=torch.zeros_like(prob_centers).bool()
+
         all_center_shifts = []
         for it in range(self.max_iterations):
+            for idx in range(self.k):
+                prob_centers[idx] = (labels == idx).sum()
+            for idx in range(self.k):
+                prob_centers_labelled[idx] = (labels[:l_num] == idx).sum()
+
+            centers_old = centers.clone()
+
+            if self.hyperbolic:
+                if self.poincare:
+                    dist = P.pairwise_dist(u_feats, centers, curv = -self.curv, eps=1e-6)
+                else:
+                    dist = L.pairwise_dist(u_feats, centers, curv = self.curv, eps=1e-6)
+            else:
+                dist = pairwise_distance(u_feats, centers, self.pairwise_batch_size)
+            u_mindist, u_labels = torch.min(dist, dim=1)
+            u_inertia = u_mindist.sum()
+            if self.hyperbolic:
+                # DONE: Optimize by not having to take pairwise distance
+                if self.poincare:
+                    l_mindist = P.elementwise_dist(l_feats, centers[labels[:l_num]], curv = -self.curv, eps=1e-6)
+                else:
+                    #l_dist = L.pairwise_dist(l_feats, centers, curv = self.curv)
+                    # Get the distance to the corresponding label's center
+                    #l_mindist = l_dist[torch.arange(l_num), labels[:l_num]]
+                    #l_mindist, _ = torch.min(l_dist, dim=1)
+                    l_mindist = L.elementwise_dist(l_feats, centers[labels[:l_num]], curv = self.curv, eps=1e-6)
+            else:
+                # Done: Investigate how the hell this works. l_feats and centers are not the same shape afaik
+                # Might have to do with the assignment inside centers. Just looked, it does
+                l_mindist = torch.sum((l_feats - centers[labels[:l_num]])**2, dim=1)
+            l_inertia = l_mindist.sum()
+            inertia = u_inertia + l_inertia
+            labels[l_num:] = u_labels
+            if cluster_size is not None:
+                cluster_free_unseen=cluster_free
+                if it < self.max_iterations:
+                    cluster_free_unseen[0:] = False
+                    sparse_cluster[0:] = True
+                    # Woah. Double for loop
+                    for i in range(it):
+                        for idx in range(self.k):
+                            u_selected = torch.nonzero(u_labels == idx).squeeze()
+                            num = cluster_size - prob_centers_labelled[idx].int()
+                            if len(u_selected.size())==0 or u_selected.shape[0]<num:
+                                sparse_cluster[idx]=True
+                            elif u_selected.shape[0]>num:
+                                indexes = torch.argsort(dist[u_selected,idx], dim=0)[num:]
+                                indexes =u_selected[indexes]
+                                cluster_free_unseen[indexes]=True
+                                sparse_cluster[idx]=False
+                            else:
+                                sparse_cluster[idx]=False
+                        cluster_distance=torch.argsort(dist[cluster_free_unseen, :][:, sparse_cluster], dim=1)
+                        mid_labels = torch.from_numpy(np.arange(self.k))[sparse_cluster][cluster_distance]
+                        if mid_labels.shape[1]!=0:
+                            u_labels[cluster_free_unseen] = mid_labels[:, 0]
+                            cluster_free_unseen[0:] = False
+                labels[l_num:]= u_labels
+
+            for idx in range(self.k):
+
+                selected = torch.nonzero(labels == idx).squeeze()
+                selected = torch.index_select(cat_feats, 0, selected)
+                if len(selected) == 0:
+                    #print("Class number:", idx, "has no samples. Skipping.")
+                    continue
+                if self.hyperbolic:
+                    if self.poincare:
+                        centers[idx] = P.einstein_midpoint(selected, -self.curv)
+                    else:
+                        L_Centroid = L.lorentz_centroid(selected, self.curv)
+                        if L_Centroid is None:
+                            centers[idx] = L.einstein_midpoint(selected, self.curv)
+                        else:
+                            centers[idx] = L_Centroid
+                else:
+                    #centers[idx] = L.einstein_midpoint(selected, self.curv) if self.hyperbolic else selected.mean(dim=0)
+                    centers[idx] = selected.mean(dim=0)
+
+            if best_inertia is None or inertia < best_inertia:
+                best_labels = labels.clone()
+                best_centers = centers.clone()
+                best_inertia = inertia
+
+            # DONE: Add hyperbolic distance
+            if self.hyperbolic:
+                if self.poincare:
+                    center_shift = torch.sum(P.elementwise_dist(centers, centers_old, curv = -self.curv, eps=1e-6))
+                else:
+                    center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv, eps=1e-6))
+            else:
+                center_shift = torch.sum(torch.sqrt(torch.sum((centers - centers_old) ** 2, dim=1)))
+            all_center_shifts.append(center_shift.item())
+            if center_shift ** 2 < self.tolerance:
+                #break out of the main loop if the results are optimal, ie. the centers don't change their positions much(more than our tolerance)
+                break
+
+        # For some reason the SelEx code just runs the loop again but without balancing
+        for it in range(self.max_iterations):
+            for idx in range(self.k):
+                prob_centers[idx] = (labels == idx).sum()
+            for idx in range(self.k):
+                prob_centers_labelled[idx] = (labels[:l_num] == idx).sum()
+
             centers_old = centers.clone()
 
             if self.hyperbolic:

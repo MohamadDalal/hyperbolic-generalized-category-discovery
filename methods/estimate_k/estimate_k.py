@@ -64,7 +64,8 @@ def test_kmeans(K, merge_test_loader, args=None, verbose=False):
     print('Fitting K-Means...')
     if args.hyperbolic:
         #TODO: Investigate why K++ is failing to assign more than one center (Points too close to one another maybe?)
-        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=args.curvature, init="random")
+        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=args.curvature, init="random",
+                               cluster_size=args.cluster_size)
         kmeans.fit(all_feats)
         preds = kmeans.labels_.numpy()
     else:
@@ -137,7 +138,8 @@ def test_kmeans_for_scipy(K, merge_test_loader, args=None, verbose=False):
     print(f'Fitting K-Means for K = {K}...')
     if args.hyperbolic:
         #TODO: Investigate why K++ is failing to assign more than one center (Points too close to one another maybe?)
-        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=args.curvature, init="random")
+        kmeans = SemiSupKMeans(k=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0, hyperbolic=True, curv=args.curvature, init="random",
+                               cluster_size=args.cluster_size)
         kmeans.fit(all_feats)
         preds = kmeans.labels_.numpy()
     else:
@@ -242,6 +244,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_name', type=str, default='cifar10', help='options: cifar10, cifar100, scars')
     parser.add_argument('--prop_train_labels', type=float, default=0.5)
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
+    parser.add_argument('--cluster_size', type=int, default=None, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means. Only works with hyperbolic learning.')
 
     # ----------------------
     # INIT
