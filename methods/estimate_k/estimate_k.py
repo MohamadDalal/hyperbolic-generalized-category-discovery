@@ -244,6 +244,8 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_name', type=str, default='cifar10', help='options: cifar10, cifar100, scars')
     parser.add_argument('--prop_train_labels', type=float, default=0.5)
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
+
+    # New arguments after thesis
     parser.add_argument('--cluster_size', type=int, default=None, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means. Only works with hyperbolic learning.')
 
     # ----------------------

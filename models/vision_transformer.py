@@ -279,7 +279,7 @@ def vit_base(patch_size=16, **kwargs):
 
 # TODO: Consider ablating without using the last layer, as SimGCD does contrastive learning on the layer before last
 class DINOHead(nn.Module):
-    def __init__(self, in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256):
+    def __init__(self, in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256, HypCD_mode = False):
         super().__init__()
         nlayers = max(nlayers, 1)
         if nlayers == 1:
@@ -301,6 +301,7 @@ class DINOHead(nn.Module):
         self.last_layer.weight_g.data.fill_(1)
         if norm_last_layer:
             self.last_layer.weight_g.requires_grad = False
+        self.HypCD_mode = HypCD_mode
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -310,15 +311,16 @@ class DINOHead(nn.Module):
 
     def forward(self, x):
         x = self.mlp(x)
-        x = nn.functional.normalize(x, dim=-1, p=2)
-        x = self.last_layer(x)
-        x_norm = torch.norm(x, dim=1)
+        if not self.HypCD_mode:
+            x = nn.functional.normalize(x, dim=-1, p=2)
+            x = self.last_layer(x)
+            x_norm = torch.norm(x, dim=1)   # This norm doesn't exist in HypCD
         return x, [(x_norm.mean(), x_norm.std(), x_norm.max(), x_norm.min())]
 
 class Hyperbolic_DINOHead(nn.Module):
     def __init__(self, in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256,
                  curv_init: float = 1.0, alpha_init: float = 1.0, learn_curv: bool = True, learn_alpha: bool = True,
-                 poincare: bool = False, euclidean_clip_value = None):
+                 poincare: bool = False, euclidean_clip_value = None, HypCD_mode = False):
         super().__init__()
         # Initialize curvature parameter. Hyperboloid curvature will be `-curv`.
         # Curvature is learned in log space
@@ -361,6 +363,7 @@ class Hyperbolic_DINOHead(nn.Module):
         self.last_layer.weight_g.data.fill_(1)
         if norm_last_layer:
             self.last_layer.weight_g.requires_grad = False
+        self.HypCD_mode = HypCD_mode
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -372,8 +375,9 @@ class Hyperbolic_DINOHead(nn.Module):
     # Then use an exponential map to lift features to hyperbolic space
     def forward(self, x):
         x = self.mlp(x)
-        x = nn.functional.normalize(x, dim=-1, p=2)
-        x = self.last_layer(x)
+        if not self.HypCD_mode:
+            x = nn.functional.normalize(x, dim=-1, p=2)
+            x = self.last_layer(x)
         log_stats = []
 
 

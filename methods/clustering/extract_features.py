@@ -93,6 +93,9 @@ if __name__ == "__main__":
     parser.add_argument('--mlp_out_dim', type=int, default=768)
     parser.add_argument('--use_dinov2', type=str2bool, default=False)
 
+    # New arguments after thesis
+    parser.add_argument('--HypCD_mode', type=str2bool, default=False, help="Switches to VIT with registers and removes last layer from projection head")
+
     # ----------------------
     # INIT
     # ----------------------
@@ -113,7 +116,10 @@ if __name__ == "__main__":
         args.crop_pct = 0.875
         #pretrain_path = dino_pretrain_path
 
-        model = torch.hub.load('facebookresearch/dinov2:main', 'dinov2_vitb14') if args.use_dinov2 else torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
+        if args.HypCD_mode:
+            model = torch.hub.load('facebookresearch/dinov2:main', 'dinov2_vitb14_reg') if args.use_dinov2 else torch.hub.load('facebookresearch/dino:main', 'dino_vitb16_reg')
+        else:
+            model = torch.hub.load('facebookresearch/dinov2:main', 'dinov2_vitb14') if args.use_dinov2 else torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
 
         #state_dict = torch.load(pretrain_path, map_location='cpu')
         #model.load_state_dict(state_dict)
@@ -139,10 +145,11 @@ if __name__ == "__main__":
         projection_head = vits.__dict__['Hyperbolic_DINOHead'](in_dim=args.feat_dim, out_dim=args.mlp_out_dim,
                                                                nlayers=args.num_mlp_layers, learn_curv=False,
                                                                poincare = args.poincare,
-                                                               euclidean_clip_value=args.euclidean_clipping)
+                                                               euclidean_clip_value=args.euclidean_clipping,
+                                                               HypCD_mode = args.HypCD_mode)
     else:
         projection_head = vits.__dict__['DINOHead'](in_dim=args.feat_dim, out_dim=args.mlp_out_dim,
-                                                    nlayers=args.num_mlp_layers)
+                                                    nlayers=args.num_mlp_layers, HypCD_mode = args.HypCD_mode)
     model = torch.nn.Sequential(model, projection_head).to(device)
 
     print("Loading model weights...")

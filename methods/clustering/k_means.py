@@ -122,6 +122,8 @@ if __name__ == "__main__":
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
     parser.add_argument('--poincare', type=str2bool, default=False)
     parser.add_argument('--random_seed', type=int, default=None, help='Random seed for reproducibility')
+
+    # New arguments after thesis
     parser.add_argument('--cluster_size', type=int, default=None, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means')
 
     # ----------------------
