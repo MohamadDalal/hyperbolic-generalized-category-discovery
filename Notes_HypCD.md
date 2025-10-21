@@ -12,3 +12,5 @@ For both the angle starts at max_weight and moves to 0 as time progresses. Max_w
 
 HypCD has absolutely no gradient modifications. At least in train script
 HypCD uses a projection head that is missing the last layer, which goes from bottleneck dim to out dim. However, this is fine, since the bottleneck dim can be used as out_dim, as the hidden_dim still exists for hidden layers. 
+
+While the parameters in the HypCD code have curvature at 0.1 and clipping at 1.2, the paper says they use curvature of 0.05 and clipping at 2.3 for fine-grained datasets at least.

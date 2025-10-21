@@ -66,11 +66,11 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
     print('Fitting Semi-Supervised K-Means...')
     if args.hyperbolic:
         kmeans = SemiSupKMeans(k=K, tolerance=1e-4, max_iterations=args.max_kmeans_iter, init='k-means++',
-                            n_init=args.k_means_init, random_state=args.random_seed, n_jobs=None, pairwise_batch_size=None, mode=None,
+                            n_init=args.k_means_init, random_state=args.seed, n_jobs=None, pairwise_batch_size=None, mode=None,
                             hyperbolic=True, curv=args.curvature, poincare=args.poincare, cluster_size=args.cluster_size)
     else:
         kmeans = SemiSupKMeans(k=K, tolerance=1e-4, max_iterations=args.max_kmeans_iter, init='k-means++',
-                            n_init=args.k_means_init, random_state=args.random_seed, n_jobs=None, pairwise_batch_size=1024, mode=None,
+                            n_init=args.k_means_init, random_state=args.seed, n_jobs=None, pairwise_batch_size=1024, mode=None,
                             cluster_size=args.cluster_size)
 
     l_feats, u_feats, l_targets, u_targets = (torch.from_numpy(x).to(device) for
@@ -121,17 +121,19 @@ if __name__ == "__main__":
     parser.add_argument('--use_ssb_splits', type=str2bool, default=True)
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
     parser.add_argument('--poincare', type=str2bool, default=False)
-    parser.add_argument('--random_seed', type=int, default=None, help='Random seed for reproducibility')
+    parser.add_argument('--seed', type=int, default=0, help='Seed for reproducibility')
 
     # New arguments after thesis
-    parser.add_argument('--cluster_size', type=int, default=None, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means')
+    parser.add_argument('--cluster_size', type=int, default=-1, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means')
 
     # ----------------------
     # INIT
     # ----------------------
     args = parser.parse_args()
+    if args.cluster_size < 0:
+        args.cluster_size = None
     cluster_accs = {}
-    seed_torch(0)
+    seed_torch(args.seed)
     args.save_dir = os.path.join(args.root_dir, f'{args.model_name}_{args.dataset_name}')
 
     args = get_class_splits(args)
@@ -199,6 +201,7 @@ if __name__ == "__main__":
     center_shifts_path = os.path.join(args.save_dir, 'ss_kmeans_center_shifts.pt')
     torch.save(kmeans.cluster_centers_, cluster_save_path)
     torch.save(kmeans.center_shifts_, center_shifts_path)
+    print('Testing the calculated clusters on test data...')
     test_cluster(test_loader, kmeans.cluster_centers_, args, device)
     for n, i in enumerate(kmeans.cluster_centers_):
         if i.isnan().any():

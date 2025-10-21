@@ -246,12 +246,14 @@ if __name__ == "__main__":
     parser.add_argument('--hyperbolic', type=str2bool, default=False)
 
     # New arguments after thesis
-    parser.add_argument('--cluster_size', type=int, default=None, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means. Only works with hyperbolic learning.')
+    parser.add_argument('--cluster_size', type=int, default=-1, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means. Only works with hyperbolic learning.')
 
     # ----------------------
     # INIT
     # ----------------------
     args = parser.parse_args()
+    if args.cluster_size < 0:
+        args.cluster_size = None
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     cluster_accs = {}

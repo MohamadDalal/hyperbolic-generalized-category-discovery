@@ -9,7 +9,7 @@ from torch.optim import AdamW, SGD, lr_scheduler
 from project_utils.cluster_utils import mixed_eval, AverageMeter
 from models import vision_transformer as vits
 
-from project_utils.general_utils import init_experiment, get_mean_lr, str2bool, get_dino_head_weights
+from project_utils.general_utils import init_experiment, get_mean_lr, str2bool, get_dino_head_weights, seed_torch
 
 from data.augmentations import get_transform
 from data.get_datasets import get_datasets, get_class_splits
@@ -657,7 +657,7 @@ if __name__ == "__main__":
     parser.add_argument('--exp_root', type=str, default=exp_root)
     parser.add_argument('--exp_id', type=str, default=None)
     parser.add_argument('--transform', type=str, default='imagenet')
-    parser.add_argument('--seed', default=1, type=int)
+    parser.add_argument('--seed', default=0, type=int)
 
     parser.add_argument('--base_model', type=str, default='vit_dino')
     parser.add_argument('--temperature', type=float, default=1.0)
@@ -687,13 +687,15 @@ if __name__ == "__main__":
     parser.add_argument('--avg_grad_norm', type=float, default=2.5)
 
     # New arguments after thesis
-    parser.add_argument('--cluster_size', type=int, default=None, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means. Only works with hyperbolic learning.')
+    parser.add_argument('--cluster_size', type=int, default=-1, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means. Only works with hyperbolic learning.')
     parser.add_argument('--HypCD_mode', type=str2bool, default=False, help="Switches to VIT with registers and removes last layer from projection head")
 
     # ----------------------
     # INIT
     # ----------------------
     args = parser.parse_args()
+    if args.cluster_size < 0:
+        args.cluster_size = None
     device = torch.device('cuda:0')
     args = get_class_splits(args)
 
@@ -702,6 +704,8 @@ if __name__ == "__main__":
 
     init_experiment(args, runner_name=['metric_learn_gcd'], exp_id=args.exp_id)
     print(f'Using evaluation function {args.eval_funcs[0]} to print results')
+
+    seed_torch(args.seed)
 
     #global DEBUG_DIR
     DEBUG_DIR = args.debug_dir
