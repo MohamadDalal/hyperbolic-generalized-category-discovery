@@ -390,78 +390,79 @@ class K_Means:
                 break
 
         # For some reason the SelEx code just runs the loop again but without balancing
-        for it in range(self.max_iterations):
-            for idx in range(self.k):
-                prob_centers[idx] = (labels == idx).sum()
-            for idx in range(self.k):
-                prob_centers_labelled[idx] = (labels[:l_num] == idx).sum()
+        if self.cluster_size is not None:
+            for it in range(self.max_iterations):
+                for idx in range(self.k):
+                    prob_centers[idx] = (labels == idx).sum()
+                for idx in range(self.k):
+                    prob_centers_labelled[idx] = (labels[:l_num] == idx).sum()
 
-            centers_old = centers.clone()
+                centers_old = centers.clone()
 
-            if self.hyperbolic:
-                if self.poincare:
-                    dist = P.pairwise_dist(u_feats, centers, curv = -self.curv, eps=1e-6)
-                else:
-                    dist = L.pairwise_dist(u_feats, centers, curv = self.curv, eps=1e-6)
-            else:
-                dist = pairwise_distance(u_feats, centers, self.pairwise_batch_size)
-            u_mindist, u_labels = torch.min(dist, dim=1)
-            u_inertia = u_mindist.sum()
-            if self.hyperbolic:
-                # DONE: Optimize by not having to take pairwise distance
-                if self.poincare:
-                    l_mindist = P.elementwise_dist(l_feats, centers[labels[:l_num]], curv = -self.curv, eps=1e-6)
-                else:
-                    #l_dist = L.pairwise_dist(l_feats, centers, curv = self.curv)
-                    # Get the distance to the corresponding label's center
-                    #l_mindist = l_dist[torch.arange(l_num), labels[:l_num]]
-                    #l_mindist, _ = torch.min(l_dist, dim=1)
-                    l_mindist = L.elementwise_dist(l_feats, centers[labels[:l_num]], curv = self.curv, eps=1e-6)
-            else:
-                # Done: Investigate how the hell this works. l_feats and centers are not the same shape afaik
-                # Might have to do with the assignment inside centers. Just looked, it does
-                l_mindist = torch.sum((l_feats - centers[labels[:l_num]])**2, dim=1)
-            l_inertia = l_mindist.sum()
-            inertia = u_inertia + l_inertia
-            labels[l_num:] = u_labels
-
-            for idx in range(self.k):
-
-                selected = torch.nonzero(labels == idx).squeeze()
-                selected = torch.index_select(cat_feats, 0, selected)
-                if len(selected) == 0:
-                    #print("Class number:", idx, "has no samples. Skipping.")
-                    continue
                 if self.hyperbolic:
                     if self.poincare:
-                        centers[idx] = P.einstein_midpoint(selected, -self.curv)
+                        dist = P.pairwise_dist(u_feats, centers, curv = -self.curv, eps=1e-6)
                     else:
-                        L_Centroid = L.lorentz_centroid(selected, self.curv)
-                        if L_Centroid is None:
-                            centers[idx] = L.einstein_midpoint(selected, self.curv)
+                        dist = L.pairwise_dist(u_feats, centers, curv = self.curv, eps=1e-6)
+                else:
+                    dist = pairwise_distance(u_feats, centers, self.pairwise_batch_size)
+                u_mindist, u_labels = torch.min(dist, dim=1)
+                u_inertia = u_mindist.sum()
+                if self.hyperbolic:
+                    # DONE: Optimize by not having to take pairwise distance
+                    if self.poincare:
+                        l_mindist = P.elementwise_dist(l_feats, centers[labels[:l_num]], curv = -self.curv, eps=1e-6)
+                    else:
+                        #l_dist = L.pairwise_dist(l_feats, centers, curv = self.curv)
+                        # Get the distance to the corresponding label's center
+                        #l_mindist = l_dist[torch.arange(l_num), labels[:l_num]]
+                        #l_mindist, _ = torch.min(l_dist, dim=1)
+                        l_mindist = L.elementwise_dist(l_feats, centers[labels[:l_num]], curv = self.curv, eps=1e-6)
+                else:
+                    # Done: Investigate how the hell this works. l_feats and centers are not the same shape afaik
+                    # Might have to do with the assignment inside centers. Just looked, it does
+                    l_mindist = torch.sum((l_feats - centers[labels[:l_num]])**2, dim=1)
+                l_inertia = l_mindist.sum()
+                inertia = u_inertia + l_inertia
+                labels[l_num:] = u_labels
+
+                for idx in range(self.k):
+
+                    selected = torch.nonzero(labels == idx).squeeze()
+                    selected = torch.index_select(cat_feats, 0, selected)
+                    if len(selected) == 0:
+                        #print("Class number:", idx, "has no samples. Skipping.")
+                        continue
+                    if self.hyperbolic:
+                        if self.poincare:
+                            centers[idx] = P.einstein_midpoint(selected, -self.curv)
                         else:
-                            centers[idx] = L_Centroid
-                else:
-                    #centers[idx] = L.einstein_midpoint(selected, self.curv) if self.hyperbolic else selected.mean(dim=0)
-                    centers[idx] = selected.mean(dim=0)
+                            L_Centroid = L.lorentz_centroid(selected, self.curv)
+                            if L_Centroid is None:
+                                centers[idx] = L.einstein_midpoint(selected, self.curv)
+                            else:
+                                centers[idx] = L_Centroid
+                    else:
+                        #centers[idx] = L.einstein_midpoint(selected, self.curv) if self.hyperbolic else selected.mean(dim=0)
+                        centers[idx] = selected.mean(dim=0)
 
-            if best_inertia is None or inertia < best_inertia:
-                best_labels = labels.clone()
-                best_centers = centers.clone()
-                best_inertia = inertia
+                if best_inertia is None or inertia < best_inertia:
+                    best_labels = labels.clone()
+                    best_centers = centers.clone()
+                    best_inertia = inertia
 
-            # DONE: Add hyperbolic distance
-            if self.hyperbolic:
-                if self.poincare:
-                    center_shift = torch.sum(P.elementwise_dist(centers, centers_old, curv = -self.curv, eps=1e-6))
+                # DONE: Add hyperbolic distance
+                if self.hyperbolic:
+                    if self.poincare:
+                        center_shift = torch.sum(P.elementwise_dist(centers, centers_old, curv = -self.curv, eps=1e-6))
+                    else:
+                        center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv, eps=1e-6))
                 else:
-                    center_shift = torch.sum(L.elementwise_dist(centers, centers_old, curv = self.curv, eps=1e-6))
-            else:
-                center_shift = torch.sum(torch.sqrt(torch.sum((centers - centers_old) ** 2, dim=1)))
-            all_center_shifts.append(center_shift.item())
-            if center_shift ** 2 < self.tolerance:
-                #break out of the main loop if the results are optimal, ie. the centers don't change their positions much(more than our tolerance)
-                break
+                    center_shift = torch.sum(torch.sqrt(torch.sum((centers - centers_old) ** 2, dim=1)))
+                all_center_shifts.append(center_shift.item())
+                if center_shift ** 2 < self.tolerance:
+                    #break out of the main loop if the results are optimal, ie. the centers don't change their positions much(more than our tolerance)
+                    break
 
         return best_labels, best_inertia, best_centers, i + 1, all_center_shifts
 

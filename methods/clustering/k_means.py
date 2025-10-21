@@ -96,7 +96,7 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
     all_acc, old_acc, new_acc = log_accs_from_preds(y_true=u_targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs,
                                                     save_name='SS-K-Means Train ACC Unlabelled', print_output=True)
 
-    return all_acc, old_acc, new_acc, kmeans
+    return all_acc, old_acc, new_acc, kmeans, u_targets, preds
 
 
 if __name__ == "__main__":
@@ -196,13 +196,27 @@ if __name__ == "__main__":
                               batch_size=args.batch_size, shuffle=False)
 
     print('Performing SS-K-Means on all in the training data...')
-    all_acc, old_acc, new_acc, kmeans = test_kmeans_semi_sup(train_loader, args, K=args.K)
+    all_acc, old_acc, new_acc, kmeans, train_gt, train_pred = test_kmeans_semi_sup(train_loader, args, K=args.K)
+    train_csv = "Predictions,Ground Truth\n"
+    for target, pred in zip(train_gt, train_pred):
+        train_csv += f"{int(pred)},{int(target)}\n"
+    with open(os.path.join(args.save_dir, "Training_Predictions.csv"), "w") as f:
+        f.write(train_csv)
+    torch.save(train_gt, os.path.join(args.save_dir, "Train_GT.pt"))
+    torch.save(train_pred, os.path.join(args.save_dir, "Train_Pred.pt"))
     cluster_save_path = os.path.join(args.save_dir, 'ss_kmeans_cluster_centres.pt')
     center_shifts_path = os.path.join(args.save_dir, 'ss_kmeans_center_shifts.pt')
     torch.save(kmeans.cluster_centers_, cluster_save_path)
     torch.save(kmeans.center_shifts_, center_shifts_path)
     print('Testing the calculated clusters on test data...')
-    test_cluster(test_loader, kmeans.cluster_centers_, args, device)
+    _, test_gt, test_pred = test_cluster(test_loader, kmeans.cluster_centers_, args, device, return_preds=True)
+    test_csv = "Predictions,Ground Truth\n"
+    for target, pred in zip(test_gt, test_pred):
+        test_csv += f"{int(pred)},{int(target)}\n"
+    with open(os.path.join(args.save_dir, "Test_Predictions.csv"), "w") as f:
+        f.write(test_csv)
+    torch.save(test_gt, os.path.join(args.save_dir, "Test_GT.pt"))
+    torch.save(test_pred, os.path.join(args.save_dir, "Test_Pred.pt"))
     for n, i in enumerate(kmeans.cluster_centers_):
         if i.isnan().any():
             print(f'Cluster {n} centre is NaN!')

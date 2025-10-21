@@ -23,7 +23,7 @@ import project_utils.poincare as P
 
 
 
-def test_cluster(dataloader, centers, args, device, return_ind = False):
+def test_cluster(dataloader, centers, args, device, return_ind = False, return_preds=False):
     # Find pairwise distance between test features and cluster centers
     # Use argmin function to assign each feature to the class of closest center
     # Pass predictions with ground truth's and masks to log_accs_from_preds to get accuracies
@@ -95,7 +95,10 @@ def test_cluster(dataloader, centers, args, device, return_ind = False):
     # # print(dist.mean(dim=0))
     # # print(dist.std(dim=0))
     print(np.unique(preds, return_counts=True))
-    return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs, save_name="", print_output=True, return_ind=return_ind)
+    if return_preds:
+        return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs, save_name="", print_output=True, return_ind=return_ind), targets, preds
+    else:
+        return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs, save_name="", print_output=True, return_ind=return_ind)
 
     
 
