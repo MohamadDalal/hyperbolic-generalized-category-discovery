@@ -31,11 +31,12 @@ def test_cluster(dataloader, centers, args, device, return_ind = False, return_p
     targets = []
     mask = []
     uq_idxs = []
+    filenames = []
     # debug_dist = torch.tensor([[]], device=device)
     # debug_data = None
     centers = centers[:-1]
     # First extract all features
-    for batch_idx, (feats, label, uq_idx, mask_lab_) in enumerate(tqdm(dataloader)):
+    for batch_idx, (feats, label, uq_idx, mask_lab_, filename) in enumerate(tqdm(dataloader)):
 
         feats = feats.to(device)
         label = label.to(device)
@@ -62,6 +63,8 @@ def test_cluster(dataloader, centers, args, device, return_ind = False, return_p
         mask = np.append(mask, np.array([True if x.item() in range(len(args.train_classes))
                                          else False for x in label]))
         uq_idxs = np.append(uq_idxs, uq_idx.cpu().numpy())
+        for f in filename:
+            filenames.append(f)
         if return_ind:
             torch.save(preds, os.path.join(args.debug_test_dir, "predictions"))
             torch.save(targets, os.path.join(args.debug_test_dir, "targets"))
@@ -98,7 +101,7 @@ def test_cluster(dataloader, centers, args, device, return_ind = False, return_p
     # # print(dist.std(dim=0))
     print(np.unique(preds, return_counts=True))
     if return_preds:
-        return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs, save_name="", print_output=True, return_ind=return_ind), targets, preds, uq_idxs
+        return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs, save_name="", print_output=True, return_ind=return_ind), targets, preds, uq_idxs, filenames
     else:
         return log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs, save_name="", print_output=True, return_ind=return_ind)
 
@@ -166,7 +169,7 @@ if __name__ == "__main__":
     # --------------------
     print('Building datasets...')
     train_transform, test_transform = None, None
-    _, test_dataset, _, datasets = get_datasets(args.dataset_name, train_transform, test_transform, args)
+    _, test_dataset, _, datasets = get_datasets(args.dataset_name, train_transform, test_transform, args, withFileNames=True)
 
     # Convert to feature vector dataset
     test_dataset = FeatureVectorDataset(base_dataset=test_dataset, feature_root=os.path.join(args.save_dir, 'test'))

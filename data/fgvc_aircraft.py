@@ -165,6 +165,25 @@ class FGVCAircraft(Dataset):
 
         print('Done!')
 
+class FGVCAircraft_WithFileNames(FGVCAircraft):
+
+    def __getitem__(self, index):
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (sample, target) where target is class_index of the target class.
+        """
+
+        path, target = self.samples[index]
+        sample = self.loader(path)
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return sample, target, self.uq_idxs[index], path
 
 def subsample_dataset(dataset, idxs):
 
@@ -214,12 +233,12 @@ def get_train_val_indices(train_dataset, val_split=0.2):
 
 
 def get_aircraft_datasets(train_transform, test_transform, train_classes=range(50), prop_train_labels=0.8,
-                    split_train_val=False, seed=0):
+                    split_train_val=False, seed=0, withFileNames=False):
 
     np.random.seed(seed)
 
     # Init entire training set
-    whole_training_set = FGVCAircraft(root=aircraft_root, transform=train_transform, split='trainval')
+    whole_training_set = FGVCAircraft_WithFileNames(root=aircraft_root, transform=train_transform, split='trainval') if withFileNames else FGVCAircraft(root=aircraft_root, transform=train_transform, split='trainval')
 
     # Get labelled training set which has subsampled classes, then subsample some indices from that
     train_dataset_labelled = subsample_classes(deepcopy(whole_training_set), include_classes=train_classes)
@@ -237,7 +256,7 @@ def get_aircraft_datasets(train_transform, test_transform, train_classes=range(5
     train_dataset_unlabelled = subsample_dataset(deepcopy(whole_training_set), np.array(list(unlabelled_indices)))
 
     # Get test set for all classes
-    test_dataset = FGVCAircraft(root=aircraft_root, transform=test_transform, split='test')
+    test_dataset = FGVCAircraft_WithFileNames(root=aircraft_root, transform=test_transform, split='test') if withFileNames else FGVCAircraft(root=aircraft_root, transform=test_transform, split='test')
 
     # Either split train into train and val or use test set as val
     train_dataset_labelled = train_dataset_labelled_split if split_train_val else train_dataset_labelled

@@ -94,6 +94,22 @@ class CustomCub2011(Dataset):
 
         return img, target, self.uq_idxs[idx]
 
+class CustomCub2011_WithFileNames(CustomCub2011):
+
+    def __getitem__(self, idx):
+        sample = self.data.iloc[idx]
+        path = os.path.join(self.root, self.base_folder, sample.filepath)
+        target = sample.target - 1  # Targets start at 1 by default, so shift to 0
+        img = self.loader(path)
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img, target, self.uq_idxs[idx], path
+
 
 def subsample_dataset(dataset, idxs):
 
@@ -144,12 +160,12 @@ def get_train_val_indices(train_dataset, val_split=0.2):
 
 
 def get_cub_datasets(train_transform, test_transform, train_classes=range(160), prop_train_labels=0.8,
-                    split_train_val=False, seed=0):
+                    split_train_val=False, seed=0, withFileNames=False):
 
     np.random.seed(seed)
 
     # Init entire training set
-    whole_training_set = CustomCub2011(root=cub_root, transform=train_transform, train=True)
+    whole_training_set = CustomCub2011_WithFileNames(root=cub_root, transform=train_transform, train=True) if withFileNames else CustomCub2011(root=cub_root, transform=train_transform, train=True)
 
     # Get labelled training set which has subsampled classes, then subsample some indices from that
     train_dataset_labelled = subsample_classes(deepcopy(whole_training_set), include_classes=train_classes)
@@ -167,7 +183,7 @@ def get_cub_datasets(train_transform, test_transform, train_classes=range(160), 
     train_dataset_unlabelled = subsample_dataset(deepcopy(whole_training_set), np.array(list(unlabelled_indices)))
 
     # Get test set for all classes
-    test_dataset = CustomCub2011(root=cub_root, transform=test_transform, train=False)
+    test_dataset = CustomCub2011_WithFileNames(root=cub_root, transform=test_transform, train=False) if withFileNames else CustomCub2011(root=cub_root, transform=test_transform, train=False)
 
     # Either split train into train and val or use test set as val
     train_dataset_labelled = train_dataset_labelled_split if split_train_val else train_dataset_labelled

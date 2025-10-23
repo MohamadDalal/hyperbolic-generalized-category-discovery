@@ -38,3 +38,33 @@ class MergedDataset(Dataset):
 
     def __len__(self):
         return len(self.unlabelled_dataset) + len(self.labelled_dataset)
+    
+class MergedDataset_WithFileNames(Dataset):
+
+    """
+    Takes two datasets (labelled_dataset, unlabelled_dataset) and merges them
+    Allows you to iterate over them in parallel
+    """
+
+    def __init__(self, labelled_dataset, unlabelled_dataset):
+
+        self.labelled_dataset = labelled_dataset
+        self.unlabelled_dataset = unlabelled_dataset
+        self.target_transform = None
+
+    def __getitem__(self, item):
+
+        if item < len(self.labelled_dataset):
+            img, label, uq_idx, filename = self.labelled_dataset[item]
+            labeled_or_not = 1
+
+        else:
+
+            img, label, uq_idx, filename = self.unlabelled_dataset[item - len(self.labelled_dataset)]
+            labeled_or_not = 0
+
+
+        return img, label, uq_idx, np.array([labeled_or_not]), filename
+
+    def __len__(self):
+        return len(self.unlabelled_dataset) + len(self.labelled_dataset)

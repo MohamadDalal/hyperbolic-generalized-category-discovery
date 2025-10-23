@@ -9,7 +9,7 @@ from project_utils.cluster_utils import str2bool
 from project_utils.general_utils import seed_torch
 from project_utils.cluster_and_log_utils import log_accs_from_preds
 
-from methods.clustering.feature_vector_dataset import FeatureVectorDataset
+from methods.clustering.feature_vector_dataset import FeatureVectorDataset, FeatureVectorDataset_WithFileNames
 from data.get_datasets import get_datasets, get_class_splits
 from methods.clustering.faster_mix_k_means_pytorch import K_Means as SemiSupKMeans
 from methods.test_outputs.test_outputs import test_cluster
@@ -36,10 +36,11 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
     mask_lab = np.array([])     # From all the data, which instances belong to the labelled set
     mask_cls = np.array([])     # From all the data, which instances belong to Old classes
     uq_idxs = np.array([])
+    filenames = []
 
     print('Collating features...')
     # First extract all features
-    for batch_idx, (feats, label, uq_idx, mask_lab_) in enumerate(tqdm(merge_test_loader)):
+    for batch_idx, (feats, label, uq_idx, mask_lab_, filename) in enumerate(tqdm(merge_test_loader)):
 
         feats = feats.to(device)
 
@@ -51,6 +52,8 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
                                          else False for x in label]))
         mask_lab = np.append(mask_lab, mask_lab_.cpu().bool().numpy())
         uq_idxs = np.append(uq_idxs, uq_idx.cpu().numpy())
+        for f in filename:
+            filenames.append(f)
 
     # -----------------------
     # K-MEANS
@@ -98,7 +101,7 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
     all_acc, old_acc, new_acc = log_accs_from_preds(y_true=u_targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs,
                                                     save_name='SS-K-Means Train ACC Unlabelled', print_output=True)
 
-    return all_acc, old_acc, new_acc, kmeans, u_targets, preds, uq_idxs
+    return all_acc, old_acc, new_acc, kmeans, u_targets, preds, uq_idxs, filenames
 
 
 if __name__ == "__main__":
@@ -175,7 +178,7 @@ if __name__ == "__main__":
     print('Building datasets...')
     train_transform, test_transform = None, None
     train_dataset, test_dataset, unlabelled_train_examples_test, datasets = get_datasets(args.dataset_name,
-                                                                             train_transform, test_transform, args)
+                                                                             train_transform, test_transform, args, withFileNames=True)
 
     # Set target transforms:
     target_transform_dict = {}
@@ -184,10 +187,10 @@ if __name__ == "__main__":
     target_transform = lambda x: target_transform_dict[x]
 
     # Convert to feature vector dataset
-    test_dataset = FeatureVectorDataset(base_dataset=test_dataset, feature_root=os.path.join(args.save_dir, 'test'))
-    unlabelled_train_examples_test = FeatureVectorDataset(base_dataset=unlabelled_train_examples_test,
+    test_dataset = FeatureVectorDataset_WithFileNames(base_dataset=test_dataset, feature_root=os.path.join(args.save_dir, 'test'))
+    unlabelled_train_examples_test = FeatureVectorDataset_WithFileNames(base_dataset=unlabelled_train_examples_test,
                                                           feature_root=os.path.join(args.save_dir, 'train'))
-    train_dataset = FeatureVectorDataset(base_dataset=train_dataset, feature_root=os.path.join(args.save_dir, 'train'))
+    train_dataset = FeatureVectorDataset_WithFileNames(base_dataset=train_dataset, feature_root=os.path.join(args.save_dir, 'train'))
     train_dataset.target_transform = target_transform
 
     unlabelled_train_loader = DataLoader(unlabelled_train_examples_test, num_workers=args.num_workers,
@@ -198,10 +201,10 @@ if __name__ == "__main__":
                               batch_size=args.batch_size, shuffle=False)
 
     print('Performing SS-K-Means on all in the training data...')
-    all_acc, old_acc, new_acc, kmeans, train_gt, train_pred, uq_idxs = test_kmeans_semi_sup(train_loader, args, K=args.K)
-    train_csv = "Image Index,Predictions,Ground Truth\n"
-    for uq_idx, target, pred in zip(uq_idxs, train_gt, train_pred):
-        train_csv += f"{int(uq_idx)},{int(pred)},{int(target)}\n"
+    all_acc, old_acc, new_acc, kmeans, train_gt, train_pred, uq_idxs, filenames = test_kmeans_semi_sup(train_loader, args, K=args.K)
+    train_csv = "Image Index,File Name,Predictions,Ground Truth\n"
+    for uq_idx, filename, target, pred in zip(uq_idxs, filenames, train_gt, train_pred):
+        train_csv += f"{int(uq_idx)},{filename},{int(pred)},{int(target)}\n"
     with open(os.path.join(args.save_dir, "Training_Predictions.csv"), "w") as f:
         f.write(train_csv)
     torch.save(train_gt, os.path.join(args.save_dir, "Train_GT.pt"))
@@ -211,10 +214,10 @@ if __name__ == "__main__":
     torch.save(kmeans.cluster_centers_, cluster_save_path)
     torch.save(kmeans.center_shifts_, center_shifts_path)
     print('Testing the calculated clusters on test data...')
-    _, test_gt, test_pred, uq_idxs = test_cluster(test_loader, kmeans.cluster_centers_, args, device, return_preds=True)
-    test_csv = "Image Index,Predictions,Ground Truth\n"
-    for uq_idx, target, pred in zip(uq_idxs, test_gt, test_pred):
-        test_csv += f"{int(uq_idx)},{int(pred)},{int(target)}\n"
+    _, test_gt, test_pred, uq_idxs ,filenames = test_cluster(test_loader, kmeans.cluster_centers_, args, device, return_preds=True)
+    test_csv = "Image Index,File Name,Predictions,Ground Truth\n"
+    for uq_idx, filename, target, pred in zip(uq_idxs, filenames, test_gt, test_pred):
+        test_csv += f"{int(uq_idx)},{filename},{int(pred)},{int(target)}\n"
     with open(os.path.join(args.save_dir, "Test_Predictions.csv"), "w") as f:
         f.write(test_csv)
     torch.save(test_gt, os.path.join(args.save_dir, "Test_GT.pt"))

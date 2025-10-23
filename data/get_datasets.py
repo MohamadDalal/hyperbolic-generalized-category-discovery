@@ -1,4 +1,4 @@
-from data.data_utils import MergedDataset
+from data.data_utils import MergedDataset, MergedDataset_WithFileNames
 
 from data.cifar import get_cifar_10_datasets, get_cifar_100_datasets
 from data.herbarium_19 import get_herbarium_datasets
@@ -41,7 +41,7 @@ get_dataset_funcs = {
 }
 
 
-def get_datasets(dataset_name, train_transform, test_transform, args):
+def get_datasets(dataset_name, train_transform, test_transform, args, withFileNames=False):
 
     """
     :return: train_dataset: MergedDataset which concatenates labelled and unlabelled
@@ -56,7 +56,13 @@ def get_datasets(dataset_name, train_transform, test_transform, args):
 
     # Get datasets
     get_dataset_f = get_dataset_funcs[dataset_name]
-    datasets = get_dataset_f(train_transform=train_transform, test_transform=test_transform,
+    if withFileNames:
+        datasets = get_dataset_f(train_transform=train_transform, test_transform=test_transform,
+                            train_classes=args.train_classes,
+                            prop_train_labels=args.prop_train_labels,
+                            split_train_val=False, withFileNames=True)
+    else:
+        datasets = get_dataset_f(train_transform=train_transform, test_transform=test_transform,
                             train_classes=args.train_classes,
                             prop_train_labels=args.prop_train_labels,
                             split_train_val=False)
@@ -72,8 +78,12 @@ def get_datasets(dataset_name, train_transform, test_transform, args):
             dataset.target_transform = target_transform
 
     # Train split (labelled and unlabelled classes) for training
-    train_dataset = MergedDataset(labelled_dataset=deepcopy(datasets['train_labelled']),
-                                  unlabelled_dataset=deepcopy(datasets['train_unlabelled']))
+    if withFileNames:
+        train_dataset = MergedDataset_WithFileNames(labelled_dataset=deepcopy(datasets['train_labelled']),
+                                    unlabelled_dataset=deepcopy(datasets['train_unlabelled']))
+    else:
+        train_dataset = MergedDataset(labelled_dataset=deepcopy(datasets['train_labelled']),
+                                    unlabelled_dataset=deepcopy(datasets['train_unlabelled']))
 
     test_dataset = datasets['test']
     unlabelled_train_examples_test = deepcopy(datasets['train_unlabelled'])

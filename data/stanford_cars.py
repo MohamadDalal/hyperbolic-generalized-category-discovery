@@ -9,8 +9,8 @@ from torch.utils.data import Dataset
 
 from data.data_utils import subsample_instances
 
-car_root = "/ceph/home/student.aau.dk/mdalal20/P10-project/Datasets/stanford_cars/cars_{}/"
-meta_default_path = "/ceph/home/student.aau.dk/mdalal20/P10-project/Datasets/stanford_cars/devkit/cars_{}.mat"
+car_root = "/home/vap-moda/Documents/AI-Lab-Files/P10-Project/Datasets/stanford_cars/cars_{}/"
+meta_default_path = "/home/vap-moda/Documents/AI-Lab-Files/P10-Project/Datasets/stanford_cars/devkit/cars_{}.mat"
 
 class CarsDataset(Dataset):
     """
@@ -64,6 +64,23 @@ class CarsDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
+class CarsDataset_WithFileNames(CarsDataset):
+
+    def __getitem__(self, idx):
+
+        filepath = self.data[idx]
+        image = self.loader(filepath)
+        target = self.target[idx] - 1
+
+        if self.transform is not None:
+            image = self.transform(image)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        idx = self.uq_idxs[idx]
+
+        return image, target, idx, filepath
 
 def subsample_dataset(dataset, idxs):
 
@@ -110,12 +127,12 @@ def get_train_val_indices(train_dataset, val_split=0.2):
 
 
 def get_scars_datasets(train_transform, test_transform, train_classes=range(160), prop_train_labels=0.8,
-                    split_train_val=False, seed=0):
+                    split_train_val=False, seed=0, withFileNames=False):
 
     np.random.seed(seed)
 
     # Init entire training set
-    whole_training_set = CarsDataset(data_dir=car_root, transform=train_transform, metas=meta_default_path, train=True)
+    whole_training_set = CarsDataset_WithFileNames(data_dir=car_root, transform=train_transform, metas=meta_default_path, train=True) if withFileNames else CarsDataset(data_dir=car_root, transform=train_transform, metas=meta_default_path, train=True)
 
     # Get labelled training set which has subsampled classes, then subsample some indices from that
     train_dataset_labelled = subsample_classes(deepcopy(whole_training_set), include_classes=train_classes)
@@ -133,7 +150,7 @@ def get_scars_datasets(train_transform, test_transform, train_classes=range(160)
     train_dataset_unlabelled = subsample_dataset(deepcopy(whole_training_set), np.array(list(unlabelled_indices)))
 
     # Get test set for all classes
-    test_dataset = CarsDataset(data_dir=car_root, transform=test_transform, metas=meta_default_path, train=False)
+    test_dataset = CarsDataset_WithFileNames(data_dir=car_root, transform=test_transform, metas=meta_default_path, train=False) if withFileNames else CarsDataset(data_dir=car_root, transform=test_transform, metas=meta_default_path, train=False)
 
     # Either split train into train and val or use test set as val
     train_dataset_labelled = train_dataset_labelled_split if split_train_val else train_dataset_labelled
