@@ -211,7 +211,7 @@ if __name__ == "__main__":
     torch.save(kmeans.cluster_centers_, cluster_save_path)
     torch.save(kmeans.center_shifts_, center_shifts_path)
     print('Testing the calculated clusters on test data...')
-    _, test_gt, test_pred = test_cluster(test_loader, kmeans.cluster_centers_, args, device, return_preds=True)
+    _, test_gt, test_pred, uq_idxs = test_cluster(test_loader, kmeans.cluster_centers_, args, device, return_preds=True)
     test_csv = "Image Index,Predictions,Ground Truth\n"
     for uq_idx, target, pred in zip(uq_idxs, test_gt, test_pred):
         test_csv += f"{int(uq_idx)},{int(pred)},{int(target)}\n"
