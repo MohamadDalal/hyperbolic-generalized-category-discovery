@@ -35,10 +35,11 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
     targets = np.array([])
     mask_lab = np.array([])     # From all the data, which instances belong to the labelled set
     mask_cls = np.array([])     # From all the data, which instances belong to Old classes
+    uq_idxs = np.array([])
 
     print('Collating features...')
     # First extract all features
-    for batch_idx, (feats, label, _, mask_lab_) in enumerate(tqdm(merge_test_loader)):
+    for batch_idx, (feats, label, uq_idx, mask_lab_) in enumerate(tqdm(merge_test_loader)):
 
         feats = feats.to(device)
 
@@ -49,6 +50,7 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
         mask_cls = np.append(mask_cls, np.array([True if x.item() in range(len(args.train_classes))
                                          else False for x in label]))
         mask_lab = np.append(mask_lab, mask_lab_.cpu().bool().numpy())
+        uq_idxs = np.append(uq_idxs, uq_idx.cpu().numpy())
 
     # -----------------------
     # K-MEANS
@@ -96,7 +98,7 @@ def test_kmeans_semi_sup(merge_test_loader, args, K=None):
     all_acc, old_acc, new_acc = log_accs_from_preds(y_true=u_targets, y_pred=preds, mask=mask, eval_funcs=args.eval_funcs,
                                                     save_name='SS-K-Means Train ACC Unlabelled', print_output=True)
 
-    return all_acc, old_acc, new_acc, kmeans, u_targets, preds
+    return all_acc, old_acc, new_acc, kmeans, u_targets, preds, uq_idxs
 
 
 if __name__ == "__main__":
@@ -196,10 +198,10 @@ if __name__ == "__main__":
                               batch_size=args.batch_size, shuffle=False)
 
     print('Performing SS-K-Means on all in the training data...')
-    all_acc, old_acc, new_acc, kmeans, train_gt, train_pred = test_kmeans_semi_sup(train_loader, args, K=args.K)
-    train_csv = "Predictions,Ground Truth\n"
-    for target, pred in zip(train_gt, train_pred):
-        train_csv += f"{int(pred)},{int(target)}\n"
+    all_acc, old_acc, new_acc, kmeans, train_gt, train_pred, uq_idxs = test_kmeans_semi_sup(train_loader, args, K=args.K)
+    train_csv = "Image Index,Predictions,Ground Truth\n"
+    for uq_idx, target, pred in zip(uq_idxs, train_gt, train_pred):
+        train_csv += f"{int(uq_idx)},{int(pred)},{int(target)}\n"
     with open(os.path.join(args.save_dir, "Training_Predictions.csv"), "w") as f:
         f.write(train_csv)
     torch.save(train_gt, os.path.join(args.save_dir, "Train_GT.pt"))
@@ -210,9 +212,9 @@ if __name__ == "__main__":
     torch.save(kmeans.center_shifts_, center_shifts_path)
     print('Testing the calculated clusters on test data...')
     _, test_gt, test_pred = test_cluster(test_loader, kmeans.cluster_centers_, args, device, return_preds=True)
-    test_csv = "Predictions,Ground Truth\n"
-    for target, pred in zip(test_gt, test_pred):
-        test_csv += f"{int(pred)},{int(target)}\n"
+    test_csv = "Image Index,Predictions,Ground Truth\n"
+    for uq_idx, target, pred in zip(uq_idxs, test_gt, test_pred):
+        test_csv += f"{int(uq_idx)},{int(pred)},{int(target)}\n"
     with open(os.path.join(args.save_dir, "Test_Predictions.csv"), "w") as f:
         f.write(test_csv)
     torch.save(test_gt, os.path.join(args.save_dir, "Test_GT.pt"))
