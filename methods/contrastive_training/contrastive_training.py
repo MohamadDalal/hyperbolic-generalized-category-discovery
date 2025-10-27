@@ -874,11 +874,14 @@ if __name__ == "__main__":
     if start_epoch < args.epochs:
         train(model, train_loader, test_loader_labelled, test_loader_unlabelled, args, optimizer, scheduler,
               best_test_acc=best_test_acc, start_epoch=start_epoch, best_loss=best_loss)
-    #TODO: Make it load and test on best model if inner Kmeans is being used
-    print('Testing on disjoint test set...')
-    all_acc_test, old_acc_test, new_acc_test = test_kmeans(model, test_loader_labelled,
-                                                        epoch=args.epochs, save_name='Test ACC',
-                                                        args=args)
-    print('Test Accuracies: All {:.4f} | Old {:.4f} | New {:.4f}'.format(all_acc_test, old_acc_test,
-                                                                                    new_acc_test))
+    # NOTE: This way of testing is wrong, as it fits the K-Means algorithm using the test set.
+    #       The K-Means algorithm is supposed to be fit using the train set and then predict the test set
+    #       Use the extract_features and k_means scripts to properly test
+    # TODO: Make it load and test on best model if inner Kmeans is being used
+    # print('Testing on disjoint test set...')
+    # all_acc_test, old_acc_test, new_acc_test = test_kmeans(model, test_loader_labelled,
+    #                                                     epoch=args.epochs, save_name='Test ACC',
+    #                                                     args=args)
+    # print('Test Accuracies: All {:.4f} | Old {:.4f} | New {:.4f}'.format(all_acc_test, old_acc_test,
+    #                                                                                 new_acc_test))
     print("Finished training!")
