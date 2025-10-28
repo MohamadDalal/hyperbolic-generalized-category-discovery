@@ -120,9 +120,9 @@ class K_Means:
 
             if len((cum_prob >= r).nonzero()) == 0:
                 debug = 0
-                print(f"K++: No center assigned. Iterating again. Current centers: {C.shape[0]}")
+                #print(f"K++: No center assigned. Iterating again. Current centers: {C.shape[0]}")
                 if current_iterations > n_iterations:
-                    print(f"K++: No center assigned after {n_iterations} iterations. Exiting.")
+                    print(f"K++: No center assigned after {n_iterations} iterations. Current centers: {C.shape[0]}. Exiting.")
                     return None, False
                 current_iterations += 1
             else:
