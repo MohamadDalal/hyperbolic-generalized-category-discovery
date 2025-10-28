@@ -462,23 +462,24 @@ def train(model, train_loader, test_loader, unlabelled_train_loader, args, optim
                 optimizer.zero_grad()
                 loss.backward()
                 # Add gradient clipping or normalization and logging here
-                grad_sum = 0
-                grad_max = 0
-                num_grad = 0
-                for p in model.parameters():
-                    if p.grad is not None:
-                        p.grad = min(1, args.max_grad_norm/p.grad.norm().item())*p.grad
-                        grad_sum += p.grad.norm().item()
-                        grad_max = max(grad_max, p.grad.norm().item())
-                        num_grad += 1
-                if (grad_sum/num_grad) > args.avg_grad_norm:
-                    norm_factor = args.avg_grad_norm*num_grad
+                if args.clip_gradients:
+                    grad_sum = 0
+                    grad_max = 0
+                    num_grad = 0
                     for p in model.parameters():
                         if p.grad is not None:
-                            p.grad = p.grad/norm_factor
-                step_log_dict["step/train/grad_sum"] = grad_sum
-                step_log_dict["step/train/grad_max"] = grad_max
-                step_log_dict["step/train/grad_avg"] = grad_sum/num_grad
+                            p.grad = min(1, args.max_grad_norm/p.grad.norm().item())*p.grad
+                            grad_sum += p.grad.norm().item()
+                            grad_max = max(grad_max, p.grad.norm().item())
+                            num_grad += 1
+                    if (grad_sum/num_grad) > args.avg_grad_norm:
+                        norm_factor = args.avg_grad_norm*num_grad
+                        for p in model.parameters():
+                            if p.grad is not None:
+                                p.grad = p.grad/norm_factor
+                    step_log_dict["step/train/grad_sum"] = grad_sum
+                    step_log_dict["step/train/grad_max"] = grad_max
+                    step_log_dict["step/train/grad_avg"] = grad_sum/num_grad
                 if args.hyperbolic:
                     if not args.freeze_curvature.lower() == "full":
                         model[1].curv.grad = min(1, args.curvature/model[1].curv.grad.norm().item())*model[1].curv.grad
@@ -689,6 +690,7 @@ if __name__ == "__main__":
     # New arguments after thesis
     parser.add_argument('--cluster_size', type=int, default=-1, help='Minimum cluster size for balanced K-Means. Leave as None to use unbalanced K-Means. Only works with hyperbolic learning.')
     parser.add_argument('--HypCD_mode', type=str2bool, default=False, help="Switches to VIT with registers and removes last layer from projection head")
+    parser.add_argument('--clip_gradients', type=str2bool, default=True, help="Enable or disable gradient clipping")
 
     # ----------------------
     # INIT
