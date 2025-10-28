@@ -24,9 +24,9 @@ seed=$5
 container_path="${HOME}/pytorch25-06.sif"
 
 # Dynamically set output and error filenames using job ID and iteration
-outfile="logs/GCD-${data}-Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}.out"
+outfile="logs/GCD-${data}-Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}-test.out"
 
-exp_id="GCD-${data}-Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}"
+exp_id="GCD-${data}-Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}-test"
 
 # Print the filenames for debugging
 echo "Output file: ${outfile}"
@@ -52,8 +52,8 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --dataset_name ${data} \
             --batch_size 128 \
             --grad_from_block 11 \
-            --epochs 200 \
-            --epochs_warmup 20 \
+            --epochs 2 \
+            --epochs_warmup 1 \
             --base_model vit_dino \
             --num_workers 8 \
             --use_ssb_splits 'True' \
@@ -63,11 +63,11 @@ srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${containe
             --transform 'imagenet' \
             --lr 0.1 \
             --eval_funcs 'v2' \
-            --exp_id "${data}-Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}-Train" \
+            --exp_id "${data}-Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}-Train-test" \
             --hyperbolic 'True' \
             --poincare 'True' \
             --kmeans 'True' \
-            --kmeans_frequency 30 \
+            --kmeans_frequency 1 \
             --curvature '0.05' \
             --proj_alpha 1.0 \
             --freeze_curvature 'full' \

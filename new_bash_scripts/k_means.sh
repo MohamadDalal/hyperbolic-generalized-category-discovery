@@ -12,6 +12,8 @@
 
 #####################################################################################
 
+# Example: sbatch new_bash_scripts/k_means.sh scars 1.0 0.25 2.3 false 727 False
+
 data=$1
 max_grad=$2
 avg_grad=$3
