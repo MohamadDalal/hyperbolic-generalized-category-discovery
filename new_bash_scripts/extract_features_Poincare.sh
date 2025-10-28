@@ -40,11 +40,11 @@ nvidia-smi
 if [ "$Euclidean" = "True" ]; then
     echo "Extracting features in Euclidean space"
     srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset ${data} --use_best_model 'False' \
-    --warmup_model_dir "/home/create.aau.dk/lt61yz/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/${data}-Hyperbolic-max_grad-${max_grad}-avg_grad-${avg_grad}-c-${c}-HypCD-${HypCD_mode}-Seed${seed}-Train/checkpoints/model_best_loss.pt" \
-    --exp_id "_Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}_Euclidean" --hyperbolic 'True' --poincare 'True' --euclidean_clipping 2.3 --remove_dyno_head 'True' --mlp_out_dim 256 --use_dinov2 'True' --HypCD_mode ${HypCD_mode}
+    --warmup_model_dir "/home/create.aau.dk/lt61yz/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/${data}-Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}-Train/checkpoints/model_best_loss.pt" \
+    --exp_id "_Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}_Euclidean" --hyperbolic 'True' --poincare 'True' --euclidean_clipping ${c} --remove_dyno_head 'True' --mlp_out_dim 256 --use_dinov2 'True' --HypCD_mode ${HypCD_mode}
 else
     echo "Extracting features in Hyperbolic space"
     srun --output="${outfile}" --error="${outfile}" singularity exec --nv ${container_path} ${PYTHON} -m methods.clustering.extract_features --dataset ${data} --use_best_model 'False' \
-    --warmup_model_dir "/home/create.aau.dk/lt61yz/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/${data}-Hyperbolic-max_grad-${max_grad}-avg_grad-${avg_grad}-c-${c}-HypCD-${HypCD_mode}-Seed${seed}-Train/checkpoints/model_best_loss.pt" \
-    --exp_id "_Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}" --hyperbolic 'True' --poincare 'True' --euclidean_clipping 2.3 --remove_dyno_head 'False' --mlp_out_dim 256 --use_dinov2 'True' --HypCD_mode ${HypCD_mode}
+    --warmup_model_dir "/home/create.aau.dk/lt61yz/P10-project/hyperbolic-generalized-category-discovery/osr_novel_categories/metric_learn_gcd/log/${data}-Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}-Train/checkpoints/model_best_loss.pt" \
+    --exp_id "_Hyperbolic-Poincare-c-${c}-cs-${cs}-HypCD-${HypCD_mode}-Seed${seed}" --hyperbolic 'True' --poincare 'True' --euclidean_clipping ${c} --remove_dyno_head 'False' --mlp_out_dim 256 --use_dinov2 'True' --HypCD_mode ${HypCD_mode}
 fi
